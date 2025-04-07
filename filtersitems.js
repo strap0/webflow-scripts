@@ -318,19 +318,19 @@ function createMarkerForCard(cardData) {
 
         onAdd() {
           this.div = document.createElement('div');
-          const markerId = `marker-${Math.random().toString(36).substr(2, 9)}`;
-          const popupId = `popup-${markerId}`;
           
+          // Создаем HTML структуру точно как в примере
           this.div.innerHTML = `
             <a href="${this.cardData.link}" class="map-link" target="_blank">
               <div class="map-marker-wrapper">
-                <div class="map-marker" id="${markerId}">
+                <div class="map-marker">
                   ${this.cardData.price}
                   <div class="marker-pointer"></div>
                 </div>
-                <div class="property-popup" id="${popupId}">
+
+                <div class="property-popup">
                   <div class="popup-content">
-                    <img src="${this.cardData.image || ''}" alt="Property photo">
+                    <img src="${this.cardData.image || ''}" alt="Фото объекта">
                     <div class="popup-info">
                       <div class="property-type">${this.cardData.type || ''}</div>
                       <div class="address">${this.cardData.location}</div>
@@ -345,7 +345,7 @@ function createMarkerForCard(cardData) {
           const panes = this.getPanes();
           panes.overlayMouseTarget.appendChild(this.div);
 
-          // Setup hover events
+          // Добавляем обработчики событий точно как в примере
           const marker = this.div.querySelector('.map-marker');
           const popup = this.div.querySelector('.property-popup');
           let hideTimer;
