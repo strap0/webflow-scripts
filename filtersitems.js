@@ -312,20 +312,21 @@ function setupAutocomplete() {
 }
 
 function loadMarkers() {
+  // Очищаем существующие маркеры
   markers.forEach(marker => marker.setMap(null));
   markers = [];
 
+  // Получаем все видимые карточки
   const cards = document.querySelectorAll('.catalog-card-rent:not([style*="display: none"])');
   
   cards.forEach(card => {
     const cardData = {
-      title: card.querySelector('.catalog-title-rent')?.textContent,
-      price: card.querySelector('.catalog-price-rent')?.textContent,
-      location: card.querySelector('.catalog-location-rent')?.textContent,
-      link: card.getAttribute('href'),
-      image: card.querySelector('img')?.src,
-      type: card.querySelector('[fs-cmsfilter-field="Type"]')?.textContent,
-      rooms: card.querySelector('[fs-cmsfilter-field="Rooms"]')?.textContent
+      title: card.querySelector('.catalog-title-rent')?.textContent || '',
+      price: card.querySelector('.catalog-price-rent')?.textContent || '',
+      location: card.querySelector('.catalog-location-rent')?.textContent || '',
+      image: card.querySelector('img')?.src || '',
+      type: card.querySelector('[fs-cmsfilter-field="Type"]')?.textContent || '',
+      rooms: card.querySelector('[fs-cmsfilter-field="Rooms"]')?.textContent || ''
     };
 
     if (cardData.location) {
@@ -340,83 +341,83 @@ function createMarkerForCard(cardData) {
   geocoder.geocode({ address: `${cardData.location}, Prague` }, (results, status) => {
     if (status === 'OK' && results[0]) {
       // Создаем кастомный HTML для маркера
-      const markerContent = `
-        <div class="map-marker-wrapper">
-          <div class="map-marker">
-            ${cardData.price}
-            <div class="marker-pointer"></div>
-          </div>
-          <div class="property-popup">
-            <div class="popup-content">
-              <img src="${cardData.image || 'https://placehold.co/100x70'}" alt="Property">
-              <div class="popup-info">
-                <div class="property-type">${cardData.type} • ${cardData.rooms}</div>
-                <div class="address">${cardData.location}</div>
-                <div class="price">${cardData.price}</div>
-              </div>
+      const markerDiv = document.createElement('div');
+      markerDiv.className = 'map-marker-wrapper';
+      markerDiv.innerHTML = `
+        <div class="map-marker">
+          ${cardData.price.replace(/[^0-9]/g, '')} CZK
+          <div class="marker-pointer"></div>
+        </div>
+        <div class="property-popup">
+          <div class="popup-content">
+            <img src="${cardData.image || 'https://assets.website-files.com/67c42e66e687338b49c89be5/67c42e66e687338b49c89c0c_Rectangle%2012.jpg'}" alt="Property">
+            <div class="popup-info">
+              <div class="property-type">${cardData.type} • ${cardData.rooms || ''}</div>
+              <div class="address">${cardData.location}</div>
+              <div class="price">${cardData.price}</div>
             </div>
           </div>
         </div>
       `;
 
-      // Создаем кастомный маркер
-      const marker = new google.maps.Marker({
-        position: results[0].geometry.location,
-        map: map,
-        icon: {
-          url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent('<svg width="1" height="1"></svg>'),
-          anchor: new google.maps.Point(0, 0)
-        }
-      });
+      // Создаем кастомный маркер используя OverlayView
+      const CustomMarker = function(position, map, content) {
+        this.position = position;
+        this.content = content;
+        this.setMap(map);
+      };
 
-      // Создаем оверлей для кастомного маркера
-      const overlay = new google.maps.OverlayView();
-      overlay.onAdd = function() {
-        const div = document.createElement('div');
-        div.innerHTML = markerContent;
-        div.style.position = 'absolute';
-        this.getPanes().overlayMouseTarget.appendChild(div);
-        
+      CustomMarker.prototype = new google.maps.OverlayView();
+
+      CustomMarker.prototype.onAdd = function() {
+        this.div = this.content;
+        const panes = this.getPanes();
+        panes.overlayMouseTarget.appendChild(this.div);
+
         // Добавляем обработчики для показа/скрытия попапа
-        const markerEl = div.querySelector('.map-marker');
-        const popup = div.querySelector('.property-popup');
+        const marker = this.div.querySelector('.map-marker');
+        const popup = this.div.querySelector('.property-popup');
         let hideTimer;
 
-        function showPopup() {
+        const showPopup = () => {
           clearTimeout(hideTimer);
           popup.classList.add('show');
-        }
+        };
 
-        function hidePopupDelayed() {
+        const hidePopupDelayed = () => {
           hideTimer = setTimeout(() => {
             popup.classList.remove('show');
-          }, 2000);
-        }
+          }, 300);
+        };
 
-        markerEl.addEventListener('mouseenter', showPopup);
-        markerEl.addEventListener('mouseleave', hidePopupDelayed);
+        marker.addEventListener('mouseenter', showPopup);
+        marker.addEventListener('mouseleave', hidePopupDelayed);
         popup.addEventListener('mouseenter', showPopup);
         popup.addEventListener('mouseleave', hidePopupDelayed);
-
-        this.div_ = div;
       };
 
-      overlay.draw = function() {
+      CustomMarker.prototype.draw = function() {
         const overlayProjection = this.getProjection();
-        const position = overlayProjection.fromLatLngToDivPixel(marker.getPosition());
-        
-        const div = this.div_;
-        div.style.left = (position.x - 50) + 'px';
-        div.style.top = (position.y - 40) + 'px';
+        const position = overlayProjection.fromLatLngToDivPixel(this.position);
+
+        this.div.style.position = 'absolute';
+        this.div.style.left = (position.x - 50) + 'px';
+        this.div.style.top = (position.y - 40) + 'px';
       };
 
-      overlay.onRemove = function() {
-        this.div_.parentNode.removeChild(this.div_);
-        this.div_ = null;
+      CustomMarker.prototype.onRemove = function() {
+        this.div.parentNode.removeChild(this.div);
+        this.div = null;
       };
 
-      overlay.setMap(map);
-      markers.push(marker);
+      // Создаем экземпляр кастомного маркера
+      const customMarker = new CustomMarker(
+        results[0].geometry.location,
+        map,
+        markerDiv
+      );
+
+      markers.push(customMarker);
     }
   });
 }
