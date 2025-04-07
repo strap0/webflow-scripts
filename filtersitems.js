@@ -3,26 +3,24 @@ let map;
 let markers = [];
 let autocomplete;
 let mapAutocomplete;
-let isGoogleMapsLoaded = false;
 
-// Основной класс приложения
+// Класс приложения
 class RealEstateApp {
   constructor() {
     this.initEventListeners();
     this.initFilters();
   }
 
-  // Инициализация слушателей событий
   initEventListeners() {
     document.addEventListener('DOMContentLoaded', () => {
       this.setupButtons();
       this.setupPopups();
       this.setupNoResultsMessage();
-      loadCMSOptions();
+      this.loadCMSOptions();
+      this.initMap();
     });
   }
 
-  // Настройка кнопок
   setupButtons() {
     const filterBtn = document.querySelector('.catalog-button-filter');
     const viewMapBtn = document.querySelector('.view-map');
@@ -31,96 +29,229 @@ class RealEstateApp {
     if (filterBtn) {
       filterBtn.addEventListener('click', (e) => {
         e.preventDefault();
-        openFilterPopup();
+        this.openFilterPopup();
       });
     }
 
     if (viewMapBtn) {
       viewMapBtn.addEventListener('click', (e) => {
         e.preventDefault();
-        openMapPopup();
+        this.openMapPopup();
       });
     }
 
     if (mapButton) {
       mapButton.addEventListener('click', (e) => {
         e.preventDefault();
-        closeFilterPopup();
-        openMapPopup();
+        this.closeFilterPopup();
+        this.openMapPopup();
       });
     }
   }
 
-  // Инициализация фильтров
-  initFilters() {
-    loadSelectOptions('#type', 'Type', 'Все объекты');
-    loadSelectOptions('#category', 'Category', 'Все типы');
-    loadSelectOptions('#district', 'zone', 'Все районы');
-    loadSelectOptions('#rooms', 'Rooms', 'Все варианты');
+  openFilterPopup() {
+    const popup = document.querySelector('.popup-filter');
+    if (popup) {
+      popup.style.display = 'flex';
+      document.body.style.overflow = 'hidden';
+    }
   }
 
-  // Настройка попапов
-  setupPopups() {
+  closeFilterPopup() {
     const popup = document.querySelector('.popup-filter');
-    const closeButton = popup?.querySelector('.close-button');
+    if (popup) {
+      popup.style.display = 'none';
+      document.body.style.overflow = '';
+    }
+  }
 
-    if (closeButton && popup) {
-      closeButton.addEventListener('click', () => {
-        popup.style.display = 'none';
-        document.body.style.overflow = '';
-      });
+  openMapPopup() {
+    const popup = document.querySelector('.popup-map');
+    if (popup) {
+      popup.style.display = 'flex';
+      document.body.style.overflow = 'hidden';
+      if (!map) {
+        this.initMap();
+      } else {
+        google.maps.event.trigger(map, 'resize');
+      }
+    }
+  }
 
-      popup.addEventListener('click', (e) => {
-        if (e.target === popup) {
-          popup.style.display = 'none';
-          document.body.style.overflow = '';
+  closeMapPopup() {
+    const popup = document.querySelector('.popup-map');
+    if (popup) {
+      popup.style.display = 'none';
+      document.body.style.overflow = '';
+    }
+  }
+
+  initMap() {
+    const mapElement = document.getElementById('map');
+    if (!mapElement || typeof google === 'undefined') return;
+
+    const prague = { lat: 50.0755, lng: 14.4378 };
+    map = new google.maps.Map(mapElement, {
+      zoom: 12,
+      center: prague,
+      styles: [{
+        "featureType": "poi",
+        "elementType": "labels",
+        "stylers": [{ "visibility": "off" }]
+      }],
+      mapTypeControl: false,
+      fullscreenControl: false,
+      streetViewControl: false
+    });
+
+    this.setupAutocomplete();
+    this.loadMarkers();
+  }
+
+  setupAutocomplete() {
+    const mapSearchInput = document.getElementById('map-search');
+    const locationInput = document.getElementById('location');
+
+    const autocompleteOptions = {
+      componentRestrictions: { country: 'cz' },
+      types: ['address']
+    };
+
+    if (mapSearchInput) {
+      mapAutocomplete = new google.maps.places.Autocomplete(mapSearchInput, autocompleteOptions);
+      mapAutocomplete.addListener('place_changed', () => {
+        const place = mapAutocomplete.getPlace();
+        if (place.geometry) {
+          map.setCenter(place.geometry.location);
+          map.setZoom(15);
         }
       });
     }
 
-    // Обработчик Escape
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        closeFilterPopup();
-        closeMapPopup();
+    if (locationInput) {
+      autocomplete = new google.maps.places.Autocomplete(locationInput, autocompleteOptions);
+    }
+  }
+
+  loadMarkers() {
+    markers.forEach(marker => marker.setMap(null));
+    markers = [];
+
+    const cards = document.querySelectorAll('.catalog-card-rent:not([style*="display: none"])');
+    
+    cards.forEach(card => {
+      const cardData = {
+        title: card.querySelector('.catalog-title-rent')?.textContent || '',
+        price: card.querySelector('.catalog-price-rent')?.textContent || '',
+        location: card.querySelector('.catalog-location-rent')?.textContent || '',
+        image: card.querySelector('.catalog-image-rent')?.src || '',
+        link: card.querySelector('a')?.href || '',
+        type: card.querySelector('.catalog-type')?.textContent || '',
+        rooms: card.querySelector('.catalog-rooms-type')?.textContent || ''
+      };
+
+      if (cardData.location) {
+        this.createMarkerForCard(cardData);
       }
     });
   }
 
-  // Настройка сообщения об отсутствии результатов
-  setupNoResultsMessage() {
-    const catalogList = document.querySelector('.catalog-list-rent');
-    if (!catalogList) return;
+  createMarkerForCard(cardData) {
+    if (!cardData.location) return;
+    
+    const geocoder = new google.maps.Geocoder();
+    geocoder.geocode({ address: `${cardData.location}, Prague` }, (results, status) => {
+      if (status === 'OK' && results[0]) {
+        const position = results[0].geometry.location;
+        
+        // Форматируем цену
+        const priceNumber = parseInt(cardData.price.replace(/\D/g, ''));
+        const formattedPrice = this.formatPrice(priceNumber);
+        
+        const CustomMarker = new google.maps.OverlayView();
+        
+        CustomMarker.onAdd = function() {
+          const div = document.createElement('div');
+          div.innerHTML = `
+            <div class="map-marker-wrapper">
+              <div class="map-marker">
+                ${formattedPrice}
+                <div class="marker-pointer"></div>
+              </div>
+              <div class="property-popup">
+                <div class="popup-content">
+                  <img src="${cardData.image}" alt="${cardData.title}">
+                  <div class="popup-info">
+                    <div class="property-type">${cardData.type} ${cardData.rooms}</div>
+                    <div class="address">${cardData.location}</div>
+                    <div class="price">${formattedPrice} CZK</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+          
+          this.div = div;
+          const panes = this.getPanes();
+          panes.overlayMouseTarget.appendChild(div);
+          
+          const marker = div.querySelector('.map-marker');
+          const popup = div.querySelector('.property-popup');
+          let hideTimer;
 
-    let noResultsMsg = document.querySelector('.no-results-message');
-    if (!noResultsMsg) {
-      noResultsMsg = document.createElement('div');
-      noResultsMsg.className = 'no-results-message';
-      catalogList.parentNode.insertBefore(noResultsMsg, catalogList.nextSibling);
-    }
+          const showPopup = () => {
+            clearTimeout(hideTimer);
+            popup.classList.add('show');
+          };
 
-    const checkVisibleItems = () => {
-      const hasVisibleItems = Array.from(catalogList.children).some(child => 
-        !child.hasAttribute('hidden') && 
-        !child.classList.contains('w-dyn-empty') &&
-        getComputedStyle(child).display !== 'none'
-      );
+          const hidePopupDelayed = () => {
+            hideTimer = setTimeout(() => {
+              popup.classList.remove('show');
+            }, 300);
+          };
 
-      noResultsMsg.textContent = 'Объекты с такими параметрами не найдены. Попробуйте изменить параметры поиска.';
-      noResultsMsg.style.display = hasVisibleItems ? 'none' : 'block';
-    };
+          marker.addEventListener('mouseenter', showPopup);
+          marker.addEventListener('mouseleave', hidePopupDelayed);
+          popup.addEventListener('mouseenter', showPopup);
+          popup.addEventListener('mouseleave', hidePopupDelayed);
 
-    const observer = new MutationObserver(checkVisibleItems);
-    observer.observe(catalogList, { 
-      childList: true, 
-      subtree: true, 
-      attributes: true,
-      attributeFilter: ['hidden', 'style', 'class']
+          div.addEventListener('click', () => {
+            window.location.href = cardData.link;
+          });
+        };
+
+        CustomMarker.draw = function() {
+          if (!this.div) return;
+          
+          const overlayProjection = this.getProjection();
+          const position = overlayProjection.fromLatLngToDivPixel(results[0].geometry.location);
+          
+          this.div.style.left = position.x + 'px';
+          this.div.style.top = position.y + 'px';
+          this.div.style.position = 'absolute';
+          this.div.style.transform = 'translate(-50%, -100%)';
+        };
+
+        CustomMarker.onRemove = function() {
+          if (this.div) {
+            this.div.parentNode.removeChild(this.div);
+            this.div = null;
+          }
+        };
+
+        CustomMarker.setMap(map);
+        markers.push(CustomMarker);
+      }
     });
-
-    checkVisibleItems();
   }
-}
+
+  formatPrice(price) {
+    return price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  }
+
+  // Остальные методы из вашего текущего filtersitems.js
+  // ...
+
 
 // Функции для работы с селектами
 function loadSelectOptions(selectId, fieldName, defaultText) {
@@ -547,3 +678,11 @@ function updateButtonsState(isLoading) {
 
 // Создаем экземпляр приложения
 const app = new RealEstateApp();
+
+// Добавляем обработчик Escape
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    app.closeFilterPopup();
+    app.closeMapPopup();
+  }
+});
