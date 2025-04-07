@@ -127,56 +127,28 @@ function loadSelectOptions(selectId, fieldName, defaultText) {
   const select = document.querySelector(selectId);
   if (!select) return;
 
-  // Создаем Set для хранения уникальных значений
-  const uniqueValues = new Set();
-  
-  // Добавляем значение по умолчанию
-  uniqueValues.add(defaultText);
-  
-  // Получаем все элементы с атрибутом fs-cmsfilter-field
-  document.querySelectorAll(`[fs-cmsfilter-field="${fieldName}"]`).forEach(item => {
-    const value = item.textContent.trim();
-    if (value && value !== defaultText) {
-      // Для поля Type преобразуем английские значения в русские
-      if (fieldName === 'Type') {
-        if (value === 'House') uniqueValues.add('Дом');
-        else if (value === 'Apartment') uniqueValues.add('Апартаменты');
-        else uniqueValues.add(value);
-      } 
-      // Для поля zone (районы) форматируем значения
-      else if (fieldName === 'zone') {
-        if (value.includes('Prague')) {
-          uniqueValues.add(value.trim());
-        }
-      }
-      else {
-        uniqueValues.add(value);
-      }
-    }
-  });
+  const options = Array.from(document.querySelectorAll(`[fs-cmsfilter-field="${fieldName}"]`))
+    .map(item => item.textContent.trim())
+    .filter((value, index, self) => value && self.indexOf(value) === index)
+    .sort((a, b) => a.localeCompare(b, 'ru'));
 
-  // Преобразуем Set в массив и сортируем
-  const sortedValues = Array.from(uniqueValues)
-    .filter(value => value !== defaultText) // Удаляем значение по умолчанию из сортировки
-    .sort((a, b) => a.localeCompare(b, 'ru')); // Сортируем с учетом русского языка
-
-  // Очищаем select
-  select.innerHTML = '';
-  
-  // Добавляем опцию по умолчанию первой
   const defaultOption = document.createElement('option');
   defaultOption.value = '';
   defaultOption.textContent = defaultText;
+
+  select.innerHTML = '';
   select.appendChild(defaultOption);
 
-  // Добавляем остальные отсортированные значения
-  sortedValues.forEach(value => {
-    const option = document.createElement('option');
-    option.value = value;
-    option.textContent = value;
-    select.appendChild(option);
+  options.forEach(value => {
+    if (value !== defaultText) {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = value;
+      select.appendChild(option);
+    }
   });
 }
+
 // Функция для загрузки опций из CMS
 function loadCMSOptions() {
   loadSelectOptions('#type', 'Type', 'Все объекты');
@@ -312,21 +284,17 @@ function setupAutocomplete() {
 }
 
 function loadMarkers() {
-  // Очищаем существующие маркеры
   markers.forEach(marker => marker.setMap(null));
   markers = [];
 
-  // Получаем все видимые карточки
   const cards = document.querySelectorAll('.catalog-card-rent:not([style*="display: none"])');
   
   cards.forEach(card => {
     const cardData = {
-      title: card.querySelector('.catalog-title-rent')?.textContent || '',
-      price: card.querySelector('.catalog-price-rent')?.textContent || '',
-      location: card.querySelector('.catalog-location-rent')?.textContent || '',
-      image: card.querySelector('img')?.src || '',
-      type: card.querySelector('[fs-cmsfilter-field="Type"]')?.textContent || '',
-      rooms: card.querySelector('[fs-cmsfilter-field="Rooms"]')?.textContent || ''
+      title: card.querySelector('.catalog-title-rent')?.textContent,
+      price: card.querySelector('.catalog-price-rent')?.textContent,
+      location: card.querySelector('.catalog-location-rent')?.textContent,
+      link: card.getAttribute('href')
     };
 
     if (cardData.location) {
@@ -341,40 +309,62 @@ function createMarkerForCard(cardData) {
   geocoder.geocode({ address: `${cardData.location}, Prague` }, (results, status) => {
     if (status === 'OK' && results[0]) {
       const CustomMarker = class extends google.maps.OverlayView {
-        constructor(position, map, price) {
+        constructor(position, map, cardData) {
           super();
           this.position = position;
-          this.price = price;
+          this.cardData = cardData;
           this.setMap(map);
         }
 
         onAdd() {
           this.div = document.createElement('div');
-          this.div.className = 'custom-marker';
+          const markerId = `marker-${Math.random().toString(36).substr(2, 9)}`;
+          const popupId = `popup-${markerId}`;
+          
           this.div.innerHTML = `
-            <div class="marker-price">${this.price}</div>
-          `;
-
-          this.div.style.cssText = `
-            position: absolute;
-            cursor: pointer;
-            width: auto;
-            height: auto;
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            padding: 8px 12px;
-            transform: translate(-50%, -100%);
-            white-space: nowrap;
+            <a href="${this.cardData.link}" class="map-link" target="_blank">
+              <div class="map-marker-wrapper">
+                <div class="map-marker" id="${markerId}">
+                  ${this.cardData.price}
+                  <div class="marker-pointer"></div>
+                </div>
+                <div class="property-popup" id="${popupId}">
+                  <div class="popup-content">
+                    <img src="${this.cardData.image || ''}" alt="Property photo">
+                    <div class="popup-info">
+                      <div class="property-type">${this.cardData.type || ''}</div>
+                      <div class="address">${this.cardData.location}</div>
+                      <div class="price">${this.cardData.price}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </a>
           `;
 
           const panes = this.getPanes();
           panes.overlayMouseTarget.appendChild(this.div);
 
-          this.div.addEventListener('click', () => {
-            markers.forEach(m => m.infoWindow?.close());
-            this.showInfoWindow();
-          });
+          // Setup hover events
+          const marker = this.div.querySelector('.map-marker');
+          const popup = this.div.querySelector('.property-popup');
+          let hideTimer;
+
+          const showPopup = () => {
+            clearTimeout(hideTimer);
+            popup.classList.add('show');
+          };
+
+          const hidePopupDelayed = () => {
+            hideTimer = setTimeout(() => {
+              popup.classList.remove('show');
+            }, 2000);
+          };
+
+          marker.addEventListener('mouseenter', showPopup);
+          marker.addEventListener('mouseleave', hidePopupDelayed);
+          popup.addEventListener('mouseenter', showPopup);
+          popup.addEventListener('mouseleave', hidePopupDelayed);
         }
 
         draw() {
@@ -382,6 +372,7 @@ function createMarkerForCard(cardData) {
           const position = overlayProjection.fromLatLngToDivPixel(this.position);
           
           if (this.div) {
+            this.div.style.position = 'absolute';
             this.div.style.left = position.x + 'px';
             this.div.style.top = position.y + 'px';
           }
@@ -393,26 +384,21 @@ function createMarkerForCard(cardData) {
             this.div = null;
           }
         }
-
-        showInfoWindow() {
-          const infoWindow = new google.maps.InfoWindow({
-            content: `
-              <div class="map-info-window">
-                <h3>${cardData.title}</h3>
-                <p class="location">${cardData.location}</p>
-                <p class="price">${cardData.price}</p>
-                <a href="${cardData.link}" class="info-window-link">Подробнее</a>
-              </div>
-            `
-          });
-
-          infoWindow.setPosition(this.position);
-          infoWindow.open(map);
-          this.infoWindow = infoWindow;
-        }
       };
 
-      const customMarker = new CustomMarker(results[0].geometry.location, map, cardData.price);
+      // Получаем дополнительные данные из карточки
+      const type = cardData.title?.split('•')[0].trim() || '';
+      const image = document.querySelector(`a[href="${cardData.link}"] img`)?.src || '';
+
+      const customMarker = new CustomMarker(
+        results[0].geometry.location, 
+        map, 
+        {
+          ...cardData,
+          type: type,
+          image: image
+        }
+      );
       markers.push(customMarker);
     }
   });
