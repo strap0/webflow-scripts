@@ -340,111 +340,80 @@ function createMarkerForCard(cardData) {
   
   geocoder.geocode({ address: `${cardData.location}, Prague` }, (results, status) => {
     if (status === 'OK' && results[0]) {
-      // Создаем кастомный маркер как SVG
-      const markerSvg = {
-        path: 'M0-48c-9.8 0-17.7 7.8-17.7 17.4 0 15.5 17.7 30.6 17.7 30.6s17.7-15.4 17.7-30.6c0-9.6-7.9-17.4-17.7-17.4z',
-        fillColor: '#090909',
-        fillOpacity: 1,
-        strokeWeight: 0,
-        rotation: 0,
-        scale: 1,
-        labelOrigin: new google.maps.Point(0, -30)
+      const CustomMarker = class extends google.maps.OverlayView {
+        constructor(position, map, price) {
+          super();
+          this.position = position;
+          this.price = price;
+          this.setMap(map);
+        }
+
+        onAdd() {
+          this.div = document.createElement('div');
+          this.div.className = 'custom-marker';
+          this.div.innerHTML = `
+            <div class="marker-price">${this.price}</div>
+          `;
+
+          this.div.style.cssText = `
+            position: absolute;
+            cursor: pointer;
+            width: auto;
+            height: auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 8px 12px;
+            transform: translate(-50%, -100%);
+            white-space: nowrap;
+          `;
+
+          const panes = this.getPanes();
+          panes.overlayMouseTarget.appendChild(this.div);
+
+          this.div.addEventListener('click', () => {
+            markers.forEach(m => m.infoWindow?.close());
+            this.showInfoWindow();
+          });
+        }
+
+        draw() {
+          const overlayProjection = this.getProjection();
+          const position = overlayProjection.fromLatLngToDivPixel(this.position);
+          
+          if (this.div) {
+            this.div.style.left = position.x + 'px';
+            this.div.style.top = position.y + 'px';
+          }
+        }
+
+        onRemove() {
+          if (this.div) {
+            this.div.parentNode.removeChild(this.div);
+            this.div = null;
+          }
+        }
+
+        showInfoWindow() {
+          const infoWindow = new google.maps.InfoWindow({
+            content: `
+              <div class="map-info-window">
+                <h3>${cardData.title}</h3>
+                <p class="location">${cardData.location}</p>
+                <p class="price">${cardData.price}</p>
+                <a href="${cardData.link}" class="info-window-link">Подробнее</a>
+              </div>
+            `
+          });
+
+          infoWindow.setPosition(this.position);
+          infoWindow.open(map);
+          this.infoWindow = infoWindow;
+        }
       };
 
-      // Создаем маркер
-      const marker = new google.maps.Marker({
-        position: results[0].geometry.location,
-        map: map,
-        icon: markerSvg,
-        label: {
-          text: `${cardData.price.replace(/[^0-9]/g, '')} CZK`,
-          color: '#FFFFFF',
-          fontSize: '14px',
-          fontWeight: '500'
-        }
-      });
-
-      // Создаем InfoWindow с кастомным стилем
-      const infowindow = new google.maps.InfoWindow({
-        content: `
-          <div style="
-            width: 300px;
-            padding: 16px;
-            border-radius: 12px;
-            background: white;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-          ">
-            <div style="
-              display: flex;
-              gap: 12px;
-            ">
-              <img src="${cardData.image || 'https://assets.website-files.com/67c42e66e687338b49c89be5/67c42e66e687338b49c89c0c_Rectangle%2012.jpg'}" 
-                style="
-                  width: 120px;
-                  height: 80px;
-                  object-fit: cover;
-                  border-radius: 8px;
-                "
-              >
-              <div style="
-                flex: 1;
-                display: flex;
-                flex-direction: column;
-                justify-content: space-between;
-              ">
-                <div style="
-                  font-size: 14px;
-                  color: #666;
-                  margin-bottom: 4px;
-                ">${cardData.type} • ${cardData.rooms || ''}</div>
-                <div style="
-                  font-size: 13px;
-                  color: #888;
-                  margin-bottom: 8px;
-                ">${cardData.location}</div>
-                <div style="
-                  font-size: 16px;
-                  color: #090909;
-                  font-weight: bold;
-                ">${cardData.price}</div>
-              </div>
-            </div>
-          </div>
-        `,
-        pixelOffset: new google.maps.Size(0, -20)
-      });
-
-      // Добавляем обработчики событий
-      marker.addListener('mouseover', () => {
-        infowindow.open(map, marker);
-      });
-
-      marker.addListener('mouseout', () => {
-        setTimeout(() => {
-          if (!isMouseOverInfoWindow) {
-            infowindow.close();
-          }
-        }, 300);
-      });
-
-      // Переменная для отслеживания положения мыши над InfoWindow
-      let isMouseOverInfoWindow = false;
-
-      // Добавляем обработчики для InfoWindow
-      google.maps.event.addListener(infowindow, 'domready', () => {
-        const iwContainer = document.querySelector('.gm-style-iw');
-        if (iwContainer) {
-          iwContainer.addEventListener('mouseenter', () => {
-            isMouseOverInfoWindow = true;
-          });
-          iwContainer.addEventListener('mouseleave', () => {
-            isMouseOverInfoWindow = false;
-            infowindow.close();
-          });
-        }
-      });
-
-      markers.push(marker);
+      const customMarker = new CustomMarker(results[0].geometry.location, map, cardData.price);
+      markers.push(customMarker);
     }
   });
 }
