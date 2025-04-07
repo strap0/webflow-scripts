@@ -127,28 +127,42 @@ function loadSelectOptions(selectId, fieldName, defaultText) {
   const select = document.querySelector(selectId);
   if (!select) return;
 
-  const options = Array.from(document.querySelectorAll(`[fs-cmsfilter-field="${fieldName}"]`))
-    .map(item => item.textContent.trim())
-    .filter((value, index, self) => value && self.indexOf(value) === index)
-    .sort((a, b) => a.localeCompare(b, 'ru'));
+  // Получаем все уникальные значения
+  const values = new Set();
+  document.querySelectorAll(`[fs-cmsfilter-field="${fieldName}"]`).forEach(item => {
+    const value = item.textContent.trim();
+    if (value && value !== defaultText) {
+      // Конвертируем английские значения в русские для Type
+      if (fieldName === 'Type') {
+        if (value === 'House') values.add('Дом');
+        else if (value === 'Apartment') values.add('Апартаменты');
+        else values.add(value);
+      } else {
+        values.add(value);
+      }
+    }
+  });
 
+  // Создаем массив из уникальных значений и сортируем
+  const sortedValues = Array.from(values).sort((a, b) => 
+    a.localeCompare(b, 'ru')
+  );
+
+  // Очищаем select и добавляем опцию по умолчанию
+  select.innerHTML = '';
   const defaultOption = document.createElement('option');
   defaultOption.value = '';
   defaultOption.textContent = defaultText;
-
-  select.innerHTML = '';
   select.appendChild(defaultOption);
 
-  options.forEach(value => {
-    if (value !== defaultText) {
-      const option = document.createElement('option');
-      option.value = value;
-      option.textContent = value;
-      select.appendChild(option);
-    }
+  // Добавляем отсортированные значения
+  sortedValues.forEach(value => {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = value;
+    select.appendChild(option);
   });
 }
-
 // Функция для загрузки опций из CMS
 function loadCMSOptions() {
   loadSelectOptions('#type', 'Type', 'Все объекты');
