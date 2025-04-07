@@ -340,84 +340,111 @@ function createMarkerForCard(cardData) {
   
   geocoder.geocode({ address: `${cardData.location}, Prague` }, (results, status) => {
     if (status === 'OK' && results[0]) {
-      // Создаем кастомный HTML для маркера
-      const markerDiv = document.createElement('div');
-      markerDiv.className = 'map-marker-wrapper';
-      markerDiv.innerHTML = `
-        <div class="map-marker">
-          ${cardData.price.replace(/[^0-9]/g, '')} CZK
-          <div class="marker-pointer"></div>
-        </div>
-        <div class="property-popup">
-          <div class="popup-content">
-            <img src="${cardData.image || 'https://assets.website-files.com/67c42e66e687338b49c89be5/67c42e66e687338b49c89c0c_Rectangle%2012.jpg'}" alt="Property">
-            <div class="popup-info">
-              <div class="property-type">${cardData.type} • ${cardData.rooms || ''}</div>
-              <div class="address">${cardData.location}</div>
-              <div class="price">${cardData.price}</div>
+      // Создаем кастомный маркер как SVG
+      const markerSvg = {
+        path: 'M0-48c-9.8 0-17.7 7.8-17.7 17.4 0 15.5 17.7 30.6 17.7 30.6s17.7-15.4 17.7-30.6c0-9.6-7.9-17.4-17.7-17.4z',
+        fillColor: '#090909',
+        fillOpacity: 1,
+        strokeWeight: 0,
+        rotation: 0,
+        scale: 1,
+        labelOrigin: new google.maps.Point(0, -30)
+      };
+
+      // Создаем маркер
+      const marker = new google.maps.Marker({
+        position: results[0].geometry.location,
+        map: map,
+        icon: markerSvg,
+        label: {
+          text: `${cardData.price.replace(/[^0-9]/g, '')} CZK`,
+          color: '#FFFFFF',
+          fontSize: '14px',
+          fontWeight: '500'
+        }
+      });
+
+      // Создаем InfoWindow с кастомным стилем
+      const infowindow = new google.maps.InfoWindow({
+        content: `
+          <div style="
+            width: 300px;
+            padding: 16px;
+            border-radius: 12px;
+            background: white;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+          ">
+            <div style="
+              display: flex;
+              gap: 12px;
+            ">
+              <img src="${cardData.image || 'https://assets.website-files.com/67c42e66e687338b49c89be5/67c42e66e687338b49c89c0c_Rectangle%2012.jpg'}" 
+                style="
+                  width: 120px;
+                  height: 80px;
+                  object-fit: cover;
+                  border-radius: 8px;
+                "
+              >
+              <div style="
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+              ">
+                <div style="
+                  font-size: 14px;
+                  color: #666;
+                  margin-bottom: 4px;
+                ">${cardData.type} • ${cardData.rooms || ''}</div>
+                <div style="
+                  font-size: 13px;
+                  color: #888;
+                  margin-bottom: 8px;
+                ">${cardData.location}</div>
+                <div style="
+                  font-size: 16px;
+                  color: #090909;
+                  font-weight: bold;
+                ">${cardData.price}</div>
+              </div>
             </div>
           </div>
-        </div>
-      `;
+        `,
+        pixelOffset: new google.maps.Size(0, -20)
+      });
 
-      // Создаем кастомный маркер используя OverlayView
-      const CustomMarker = function(position, map, content) {
-        this.position = position;
-        this.content = content;
-        this.setMap(map);
-      };
+      // Добавляем обработчики событий
+      marker.addListener('mouseover', () => {
+        infowindow.open(map, marker);
+      });
 
-      CustomMarker.prototype = new google.maps.OverlayView();
+      marker.addListener('mouseout', () => {
+        setTimeout(() => {
+          if (!isMouseOverInfoWindow) {
+            infowindow.close();
+          }
+        }, 300);
+      });
 
-      CustomMarker.prototype.onAdd = function() {
-        this.div = this.content;
-        const panes = this.getPanes();
-        panes.overlayMouseTarget.appendChild(this.div);
+      // Переменная для отслеживания положения мыши над InfoWindow
+      let isMouseOverInfoWindow = false;
 
-        // Добавляем обработчики для показа/скрытия попапа
-        const marker = this.div.querySelector('.map-marker');
-        const popup = this.div.querySelector('.property-popup');
-        let hideTimer;
+      // Добавляем обработчики для InfoWindow
+      google.maps.event.addListener(infowindow, 'domready', () => {
+        const iwContainer = document.querySelector('.gm-style-iw');
+        if (iwContainer) {
+          iwContainer.addEventListener('mouseenter', () => {
+            isMouseOverInfoWindow = true;
+          });
+          iwContainer.addEventListener('mouseleave', () => {
+            isMouseOverInfoWindow = false;
+            infowindow.close();
+          });
+        }
+      });
 
-        const showPopup = () => {
-          clearTimeout(hideTimer);
-          popup.classList.add('show');
-        };
-
-        const hidePopupDelayed = () => {
-          hideTimer = setTimeout(() => {
-            popup.classList.remove('show');
-          }, 300);
-        };
-
-        marker.addEventListener('mouseenter', showPopup);
-        marker.addEventListener('mouseleave', hidePopupDelayed);
-        popup.addEventListener('mouseenter', showPopup);
-        popup.addEventListener('mouseleave', hidePopupDelayed);
-      };
-
-      CustomMarker.prototype.draw = function() {
-        const overlayProjection = this.getProjection();
-        const position = overlayProjection.fromLatLngToDivPixel(this.position);
-
-        this.div.style.position = 'absolute';
-        this.div.style.left = (position.x - 50) + 'px';
-        this.div.style.top = (position.y - 40) + 'px';
-      };
-
-      CustomMarker.prototype.onRemove = function() {
-        this.div.parentNode.removeChild(this.div);
-        this.div = null;
-      };
-
-      // Создаем экземпляр кастомного маркера
-      const customMarker = new CustomMarker(
-        results[0].geometry.location,
-        map,
-        markerDiv
-      );
-
-      markers.push(customMarker);
+      markers.push(marker);
     }
   });
 }
