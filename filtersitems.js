@@ -127,35 +127,49 @@ function loadSelectOptions(selectId, fieldName, defaultText) {
   const select = document.querySelector(selectId);
   if (!select) return;
 
-  // Получаем все уникальные значения
-  const values = new Set();
+  // Создаем Set для хранения уникальных значений
+  const uniqueValues = new Set();
+  
+  // Добавляем значение по умолчанию
+  uniqueValues.add(defaultText);
+  
+  // Получаем все элементы с атрибутом fs-cmsfilter-field
   document.querySelectorAll(`[fs-cmsfilter-field="${fieldName}"]`).forEach(item => {
     const value = item.textContent.trim();
     if (value && value !== defaultText) {
-      // Конвертируем английские значения в русские для Type
+      // Для поля Type преобразуем английские значения в русские
       if (fieldName === 'Type') {
-        if (value === 'House') values.add('Дом');
-        else if (value === 'Apartment') values.add('Апартаменты');
-        else values.add(value);
-      } else {
-        values.add(value);
+        if (value === 'House') uniqueValues.add('Дом');
+        else if (value === 'Apartment') uniqueValues.add('Апартаменты');
+        else uniqueValues.add(value);
+      } 
+      // Для поля zone (районы) форматируем значения
+      else if (fieldName === 'zone') {
+        if (value.includes('Prague')) {
+          uniqueValues.add(value.trim());
+        }
+      }
+      else {
+        uniqueValues.add(value);
       }
     }
   });
 
-  // Создаем массив из уникальных значений и сортируем
-  const sortedValues = Array.from(values).sort((a, b) => 
-    a.localeCompare(b, 'ru')
-  );
+  // Преобразуем Set в массив и сортируем
+  const sortedValues = Array.from(uniqueValues)
+    .filter(value => value !== defaultText) // Удаляем значение по умолчанию из сортировки
+    .sort((a, b) => a.localeCompare(b, 'ru')); // Сортируем с учетом русского языка
 
-  // Очищаем select и добавляем опцию по умолчанию
+  // Очищаем select
   select.innerHTML = '';
+  
+  // Добавляем опцию по умолчанию первой
   const defaultOption = document.createElement('option');
   defaultOption.value = '';
   defaultOption.textContent = defaultText;
   select.appendChild(defaultOption);
 
-  // Добавляем отсортированные значения
+  // Добавляем остальные отсортированные значения
   sortedValues.forEach(value => {
     const option = document.createElement('option');
     option.value = value;
