@@ -319,32 +319,34 @@ function createMarkerForCard(cardData) {
         onAdd() {
           this.div = document.createElement('div');
           this.div.style.position = 'absolute';
-          this.div.style.cursor = 'pointer';
           
-          // Важно: убираем ссылку из структуры маркера
+          // Точная HTML структура как в примере
           this.div.innerHTML = `
-            <div class="map-marker-wrapper">
-              <div class="map-marker">
-                ${this.cardData.price}
-                <div class="marker-pointer"></div>
-              </div>
-              <div class="property-popup">
-                <div class="popup-content">
-                  <img src="${this.cardData.image || ''}" alt="Фото объекта">
-                  <div class="popup-info">
-                    <div class="property-type">${this.cardData.type || ''}</div>
-                    <div class="address">${this.cardData.location}</div>
-                    <div class="price">${this.cardData.price}</div>
+            <a href="${this.cardData.link}" class="map-link" target="_blank">
+              <div class="map-marker-wrapper">
+                <div class="map-marker">
+                  ${this.cardData.price.replace('CZK', '').trim()}
+                  <div class="marker-pointer"></div>
+                </div>
+
+                <div class="property-popup">
+                  <div class="popup-content">
+                    <img src="${this.cardData.image || ''}" alt="Фото объекта">
+                    <div class="popup-info">
+                      <div class="property-type">${this.cardData.type || ''}</div>
+                      <div class="address">${this.cardData.location}</div>
+                      <div class="price">${this.cardData.price}</div>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
+            </a>
           `;
 
           const panes = this.getPanes();
           panes.overlayMouseTarget.appendChild(this.div);
 
-          // Добавляем обработчики событий
+          // Обработчики событий точно как в примере
           const marker = this.div.querySelector('.map-marker');
           const popup = this.div.querySelector('.property-popup');
           let hideTimer;
@@ -360,11 +362,6 @@ function createMarkerForCard(cardData) {
             }, 2000);
           };
 
-          // Добавляем обработчик клика для перехода
-          this.div.addEventListener('click', () => {
-            window.open(this.cardData.link, '_blank');
-          });
-
           marker.addEventListener('mouseenter', showPopup);
           marker.addEventListener('mouseleave', hidePopupDelayed);
           popup.addEventListener('mouseenter', showPopup);
@@ -376,8 +373,10 @@ function createMarkerForCard(cardData) {
           const position = overlayProjection.fromLatLngToDivPixel(this.position);
           
           if (this.div) {
+            // Позиционирование с учетом центрирования маркера
             this.div.style.left = position.x + 'px';
             this.div.style.top = position.y + 'px';
+            this.div.style.transform = 'translate(-50%, -100%)';
           }
         }
 
@@ -389,10 +388,20 @@ function createMarkerForCard(cardData) {
         }
       };
 
+      // Получаем данные из карточки
+      const card = document.querySelector(`a[href="${cardData.link}"]`);
+      const type = card.querySelector('.catalog-type')?.textContent || '';
+      const rooms = card.querySelector('.catalog-rooms-type')?.textContent || '';
+      const image = card.querySelector('.catalog-image-rent')?.src || '';
+
       const customMarker = new CustomMarker(
         results[0].geometry.location, 
         map, 
-        cardData
+        {
+          ...cardData,
+          type: `${type} • ${rooms}`,
+          image: image
+        }
       );
       markers.push(customMarker);
     }
