@@ -318,56 +318,81 @@ function createMarkerForCard(cardData) {
 
         onAdd() {
           this.div = document.createElement('div');
-          const markerId = `marker-${Math.random().toString(36).substr(2, 9)}`;
+          this.div.style.position = 'absolute';
+          this.div.style.cursor = 'pointer';
           
-          // Получаем данные из правильных классов Webflow
-          const card = document.querySelector(`a[href="${this.cardData.link}"]`);
-          const type = card.querySelector('.catalog-type')?.textContent || '';
-          const rooms = card.querySelector('.catalog-rooms-type')?.textContent || '';
-          const image = card.querySelector('.catalog-image-rent')?.src || '';
-          
+          // Важно: убираем ссылку из структуры маркера
           this.div.innerHTML = `
-            <a href="${this.cardData.link}" class="map-link" target="_blank">
-              <div class="map-marker-wrapper">
-                <div class="map-marker">
-                  ${this.cardData.price}
-                  <div class="marker-pointer"></div>
-                </div>
-
-                <div class="property-popup">
-                  <div class="popup-content">
-                    <img src="${image}" alt="Фото объекта">
-                    <div class="popup-info">
-                      <div class="property-type">${type} • ${rooms}</div>
-                      <div class="address">${this.cardData.location}</div>
-                      <div class="price">${this.cardData.price}</div>
-                    </div>
+            <div class="map-marker-wrapper">
+              <div class="map-marker">
+                ${this.cardData.price}
+                <div class="marker-pointer"></div>
+              </div>
+              <div class="property-popup">
+                <div class="popup-content">
+                  <img src="${this.cardData.image || ''}" alt="Фото объекта">
+                  <div class="popup-info">
+                    <div class="property-type">${this.cardData.type || ''}</div>
+                    <div class="address">${this.cardData.location}</div>
+                    <div class="price">${this.cardData.price}</div>
                   </div>
                 </div>
               </div>
-            </a>
+            </div>
           `;
 
-          // ... остальной код без изменений ...
+          const panes = this.getPanes();
+          panes.overlayMouseTarget.appendChild(this.div);
+
+          // Добавляем обработчики событий
+          const marker = this.div.querySelector('.map-marker');
+          const popup = this.div.querySelector('.property-popup');
+          let hideTimer;
+
+          const showPopup = () => {
+            clearTimeout(hideTimer);
+            popup.classList.add('show');
+          };
+
+          const hidePopupDelayed = () => {
+            hideTimer = setTimeout(() => {
+              popup.classList.remove('show');
+            }, 2000);
+          };
+
+          // Добавляем обработчик клика для перехода
+          this.div.addEventListener('click', () => {
+            window.open(this.cardData.link, '_blank');
+          });
+
+          marker.addEventListener('mouseenter', showPopup);
+          marker.addEventListener('mouseleave', hidePopupDelayed);
+          popup.addEventListener('mouseenter', showPopup);
+          popup.addEventListener('mouseleave', hidePopupDelayed);
         }
 
-        // ... остальные методы без изменений ...
-      };
+        draw() {
+          const overlayProjection = this.getProjection();
+          const position = overlayProjection.fromLatLngToDivPixel(this.position);
+          
+          if (this.div) {
+            this.div.style.left = position.x + 'px';
+            this.div.style.top = position.y + 'px';
+          }
+        }
 
-      // Получаем данные из карточки с правильными классами
-      const card = document.querySelector(`a[href="${cardData.link}"]`);
-      const type = card.querySelector('.catalog-type')?.textContent || '';
-      const rooms = card.querySelector('.catalog-rooms-type')?.textContent || '';
-      const image = card.querySelector('.catalog-image-rent')?.src || '';
+        onRemove() {
+          if (this.div) {
+            this.div.parentNode.removeChild(this.div);
+            this.div = null;
+          }
+        }
+      };
 
       const customMarker = new CustomMarker(
         results[0].geometry.location, 
         map, 
-        {
-          ...cardData,
-          type: `${type} • ${rooms}`,
-          image: image
-        }
+        cardData
       );
       markers.push(customMarker);
     }
