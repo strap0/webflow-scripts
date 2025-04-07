@@ -322,7 +322,10 @@ function loadMarkers() {
       title: card.querySelector('.catalog-title-rent')?.textContent,
       price: card.querySelector('.catalog-price-rent')?.textContent,
       location: card.querySelector('.catalog-location-rent')?.textContent,
-      link: card.getAttribute('href')
+      link: card.getAttribute('href'),
+      image: card.querySelector('img')?.src,
+      type: card.querySelector('[fs-cmsfilter-field="Type"]')?.textContent,
+      rooms: card.querySelector('[fs-cmsfilter-field="Rooms"]')?.textContent
     };
 
     if (cardData.location) {
@@ -336,43 +339,83 @@ function createMarkerForCard(cardData) {
   
   geocoder.geocode({ address: `${cardData.location}, Prague` }, (results, status) => {
     if (status === 'OK' && results[0]) {
+      // Создаем кастомный HTML для маркера
+      const markerContent = `
+        <div class="map-marker-wrapper">
+          <div class="map-marker">
+            ${cardData.price}
+            <div class="marker-pointer"></div>
+          </div>
+          <div class="property-popup">
+            <div class="popup-content">
+              <img src="${cardData.image || 'https://placehold.co/100x70'}" alt="Property">
+              <div class="popup-info">
+                <div class="property-type">${cardData.type} • ${cardData.rooms}</div>
+                <div class="address">${cardData.location}</div>
+                <div class="price">${cardData.price}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      // Создаем кастомный маркер
       const marker = new google.maps.Marker({
         position: results[0].geometry.location,
         map: map,
-        label: {
-          text: cardData.price,
-          color: '#2196F3',
-          fontSize: '13px',
-          fontWeight: 'bold'
+        icon: {
+          url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent('<svg width="1" height="1"></svg>'),
+          anchor: new google.maps.Point(0, 0)
         }
       });
 
-      const infoWindow = new google.maps.InfoWindow({
-        content: `
-          <div style="padding: 16px; max-width: 300px;">
-            <h3 style="margin: 0 0 8px; font-size: 16px; color: #2196F3;">${cardData.title}</h3>
-            <p style="margin: 0 0 8px; color: #666;">${cardData.location}</p>
-            <p style="margin: 0 0 16px; font-size: 18px; font-weight: bold; color: #2196F3;">${cardData.price}</p>
-            <a href="${cardData.link}" style="
-              display: inline-block;
-              padding: 8px 16px;
-              background: #2196F3;
-              color: white;
-              text-decoration: none;
-              border-radius: 4px;
-              font-weight: 500;
-              transition: background-color 0.3s;
-            ">Подробнее</a>
-          </div>
-        `
-      });
+      // Создаем оверлей для кастомного маркера
+      const overlay = new google.maps.OverlayView();
+      overlay.onAdd = function() {
+        const div = document.createElement('div');
+        div.innerHTML = markerContent;
+        div.style.position = 'absolute';
+        this.getPanes().overlayMouseTarget.appendChild(div);
+        
+        // Добавляем обработчики для показа/скрытия попапа
+        const markerEl = div.querySelector('.map-marker');
+        const popup = div.querySelector('.property-popup');
+        let hideTimer;
 
-      marker.addListener('click', () => {
-        markers.forEach(m => m.infoWindow?.close());
-        infoWindow.open(map, marker);
-        marker.infoWindow = infoWindow;
-      });
+        function showPopup() {
+          clearTimeout(hideTimer);
+          popup.classList.add('show');
+        }
 
+        function hidePopupDelayed() {
+          hideTimer = setTimeout(() => {
+            popup.classList.remove('show');
+          }, 2000);
+        }
+
+        markerEl.addEventListener('mouseenter', showPopup);
+        markerEl.addEventListener('mouseleave', hidePopupDelayed);
+        popup.addEventListener('mouseenter', showPopup);
+        popup.addEventListener('mouseleave', hidePopupDelayed);
+
+        this.div_ = div;
+      };
+
+      overlay.draw = function() {
+        const overlayProjection = this.getProjection();
+        const position = overlayProjection.fromLatLngToDivPixel(marker.getPosition());
+        
+        const div = this.div_;
+        div.style.left = (position.x - 50) + 'px';
+        div.style.top = (position.y - 40) + 'px';
+      };
+
+      overlay.onRemove = function() {
+        this.div_.parentNode.removeChild(this.div_);
+        this.div_ = null;
+      };
+
+      overlay.setMap(map);
       markers.push(marker);
     }
   });
