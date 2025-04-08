@@ -1,242 +1,559 @@
+// Глобальные переменные
+let map;
+let markers = [];
+let autocomplete;
+let mapAutocomplete;
+let isGoogleMapsLoaded = false;
 
-// ✅ filtersitems-final.js — рабочая версия со всеми функциями
+// Основной класс приложения
+class RealEstateApp {
+  constructor() {
+    this.initEventListeners();
+    this.initFilters();
+  }
 
-document.addEventListener("DOMContentLoaded", function () {
-  // ---------- ПОПАПЫ ----------
-  const openPopup = (selector) => {
-    const popup = document.querySelector(selector);
-    if (popup) {
-      popup.style.display = 'flex';
-      document.body.style.overflow = 'hidden';
+  // Инициализация слушателей событий
+  initEventListeners() {
+    document.addEventListener('DOMContentLoaded', () => {
+      this.setupButtons();
+      this.setupPopups();
+      this.setupNoResultsMessage();
+      loadCMSOptions();
+    });
+  }
+
+  // Настройка кнопок
+  setupButtons() {
+    const filterBtn = document.querySelector('.catalog-button-filter');
+    const viewMapBtn = document.querySelector('.view-map');
+    const mapButton = document.querySelector('.map-button');
+
+    if (filterBtn) {
+      filterBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        openFilterPopup();
+      });
     }
-  };
 
-  const closePopup = (selector) => {
-    const popup = document.querySelector(selector);
-    if (popup) {
-      popup.style.display = 'none';
-      document.body.style.overflow = '';
+    if (viewMapBtn) {
+      viewMapBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        openMapPopup();
+      });
     }
-  };
 
-  // Открытие попапов
-  document.querySelector('.catalog-button-filter')?.addEventListener('click', () => openPopup('.popup-filter'));
-  document.querySelector('.view-map')?.addEventListener('click', () => openPopup('.popup-map'));
-  document.querySelector('.map-button')?.addEventListener('click', () => {
-    closePopup('.popup-filter');
-    openPopup('.popup-map');
-  });
-
-  // Закрытие по крестику
-  document.querySelectorAll('.close-button').forEach(btn => {
-    btn.addEventListener('click', () => {
-      closePopup('.popup-map');
-      closePopup('.popup-filter');
-    });
-  });
-
-  // Закрытие по ESC
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      closePopup('.popup-map');
-      closePopup('.popup-filter');
+    if (mapButton) {
+      mapButton.addEventListener('click', (e) => {
+        e.preventDefault();
+        closeFilterPopup();
+        openMapPopup();
+      });
     }
-  });
+  }
 
-  // ---------- СВАЙПЕР + MULTI-IMAGE ----------
-  document.querySelectorAll('.swiper-wrapper[fs-multiimage="photo-item"]').forEach(wrapper => {
-    const hiddenImages = wrapper.closest('.w-dyn-item')?.querySelectorAll('[data-multi-image]');
-    const swiperEl = wrapper.closest('.swiper');
+  // Инициализация фильтров
+  initFilters() {
+    loadSelectOptions('#type', 'Type', 'Все объекты');
+    loadSelectOptions('#category', 'Category', 'Все типы');
+    loadSelectOptions('#district', 'zone', 'Все районы');
+    loadSelectOptions('#rooms', 'Rooms', 'Все варианты');
+  }
 
-    if (!hiddenImages || !swiperEl) return;
+  // Настройка попапов
+  setupPopups() {
+    const popup = document.querySelector('.popup-filter');
+    const closeButton = popup?.querySelector('.close-button');
 
-    hiddenImages.forEach(img => {
-      const slide = document.createElement('div');
-      slide.className = 'swiper-slide';
-      const image = document.createElement('img');
-      image.src = img.src;
-      image.alt = img.alt || '';
-      image.loading = 'lazy';
-      image.style.width = '100%';
-      image.style.height = '100%';
-      image.style.objectFit = 'cover';
-      slide.appendChild(image);
-      wrapper.appendChild(slide);
-    });
+    if (closeButton && popup) {
+      closeButton.addEventListener('click', () => {
+        popup.style.display = 'none';
+        document.body.style.overflow = '';
+      });
 
-    const slidesCount = wrapper.querySelectorAll('.swiper-slide').length;
-
-    const swiperInstance = new Swiper(swiperEl, {
-      loop: slidesCount > 1,
-      slidesPerView: 1,
-      spaceBetween: 8,
-      navigation: {
-        nextEl: swiperEl.querySelector('.swiper-button-next'),
-        prevEl: swiperEl.querySelector('.swiper-button-prev'),
-      }
-    });
-
-    if (slidesCount <= 1) {
-      swiperEl.querySelector('.swiper-button-prev')?.classList.add('hide');
-      swiperEl.querySelector('.swiper-button-next')?.classList.add('hide');
-    }
-  });
-
-  // ---------- ФИЛЬТРЫ ----------
-  window.applyFilters = function () {
-    const filters = {
-      zone: document.querySelector('#district')?.value,
-      rooms: document.querySelector('#rooms')?.value,
-      type: document.querySelector('#type')?.value,
-      category: document.querySelector('#category')?.value,
-      priceRange: document.querySelector('#price-range')?.value,
-      location: document.querySelector('#location')?.value?.toLowerCase()
-    };
-
-    const cards = document.querySelectorAll('.catalog-card-rent');
-
-    cards.forEach(card => {
-      let show = true;
-
-      const getText = (selector) => card.querySelector(`[fs-cmsfilter-field="${selector}"]`)?.textContent.trim();
-
-      if (filters.zone && getText('zone') !== filters.zone) show = false;
-      if (filters.rooms && getText('Rooms') !== filters.rooms) show = false;
-      if (filters.type && getText('Type') !== filters.type) show = false;
-      if (filters.category && getText('Category') !== filters.category) show = false;
-
-      const cardLocation = card.querySelector('.catalog-location-rent')?.textContent?.toLowerCase() || '';
-      if (filters.location && !cardLocation.includes(filters.location)) show = false;
-
-      if (filters.priceRange && show) {
-        const price = parseInt(card.querySelector('.catalog-price-rent')?.textContent.replace(/\D/g, ''));
-        switch (filters.priceRange) {
-          case '0-25000': if (price > 25000) show = false; break;
-          case '25000-50000': if (price <= 25000 || price > 50000) show = false; break;
-          case '50000-75000': if (price <= 50000 || price > 75000) show = false; break;
-          case '75000-100000': if (price <= 75000 || price > 100000) show = false; break;
-          case '100000+': if (price <= 100000) show = false; break;
-        }
-      }
-
-      card.style.display = show ? '' : 'none';
-    });
-
-    if (window.map) setTimeout(loadMarkers, 100);
-    closePopup('.popup-filter');
-  };
-
-  window.resetFilters = function () {
-    document.querySelectorAll('select').forEach(s => s.value = '');
-    document.querySelector('#location').value = '';
-    document.querySelectorAll('.catalog-card-rent').forEach(card => card.style.display = '');
-    if (window.map) setTimeout(loadMarkers, 100);
-  };
-
-  // ---------- КАРТА И МАРКЕРЫ ----------
-  window.map = null;
-  window.markers = [];
-
-  window.initMap = function () {
-    const prague = { lat: 50.0755, lng: 14.4378 };
-    const mapEl = document.getElementById('map');
-    if (!mapEl || typeof google === 'undefined') return;
-
-    map = new google.maps.Map(mapEl, {
-      zoom: 12,
-      center: prague,
-      styles: [{
-        featureType: "poi",
-        elementType: "labels",
-        stylers: [{ visibility: "off" }]
-      }],
-      mapTypeControl: false,
-      fullscreenControl: false,
-      streetViewControl: false
-    });
-
-    loadMarkers();
-  };
-
-  window.loadMarkers = function () {
-    if (!map) return;
-
-    markers.forEach(m => m.setMap(null));
-    markers = [];
-
-    const visibleCards = document.querySelectorAll('.catalog-card-rent:not([style*="display: none"])');
-
-    visibleCards.forEach(card => {
-      const location = card.querySelector('.catalog-location-rent')?.textContent;
-      const price = card.querySelector('.catalog-price-rent')?.textContent;
-      const type = card.querySelector('.catalog-type')?.textContent;
-      const rooms = card.querySelector('.catalog-rooms-type')?.textContent;
-      const image = card.querySelector('.catalog-image-rent')?.src;
-      const link = card.querySelector('a')?.href;
-
-      if (!location) return;
-
-      const geocoder = new google.maps.Geocoder();
-      geocoder.geocode({ address: location + ", Prague" }, (results, status) => {
-        if (status === 'OK' && results[0]) {
-          const pos = results[0].geometry.location;
-          const overlay = new google.maps.OverlayView();
-
-          overlay.onAdd = function () {
-            const div = document.createElement('div');
-            div.innerHTML = `
-              <div class="map-marker-wrapper">
-                <div class="map-marker">
-                  ${price}
-                  <div class="marker-pointer"></div>
-                </div>
-                <div class="property-popup">
-                  <div class="popup-content">
-                    <img src="${image}" alt="">
-                    <div class="popup-info">
-                      <div class="property-type">${type} ${rooms}</div>
-                      <div class="address">${location}</div>
-                      <div class="price">${price}</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            `;
-            this.div = div;
-            const panes = this.getPanes();
-            panes.overlayMouseTarget.appendChild(div);
-
-            const marker = div.querySelector('.map-marker');
-            const popup = div.querySelector('.property-popup');
-            let timer;
-            const show = () => { clearTimeout(timer); popup.classList.add('show'); };
-            const hide = () => { timer = setTimeout(() => popup.classList.remove('show'), 300); };
-
-            marker.addEventListener('mouseenter', show);
-            marker.addEventListener('mouseleave', hide);
-            popup.addEventListener('mouseenter', show);
-            popup.addEventListener('mouseleave', hide);
-
-            div.addEventListener('click', () => {
-              if (link) window.location.href = link;
-            });
-          };
-
-          overlay.draw = function () {
-            const proj = this.getProjection();
-            const posPx = proj.fromLatLngToDivPixel(pos);
-            if (this.div) {
-              this.div.style.left = posPx.x + 'px';
-              this.div.style.top = posPx.y + 'px';
-              this.div.style.position = 'absolute';
-              this.div.style.transform = 'translate(-50%, -100%)';
-            }
-          };
-
-          overlay.setMap(map);
-          markers.push(overlay);
+      popup.addEventListener('click', (e) => {
+        if (e.target === popup) {
+          popup.style.display = 'none';
+          document.body.style.overflow = '';
         }
       });
+    }
+
+    // Обработчик Escape
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeFilterPopup();
+        closeMapPopup();
+      }
     });
+  }
+
+  // Настройка сообщения об отсутствии результатов
+  setupNoResultsMessage() {
+    const catalogList = document.querySelector('.catalog-list-rent');
+    if (!catalogList) return;
+
+    let noResultsMsg = document.querySelector('.no-results-message');
+    if (!noResultsMsg) {
+      noResultsMsg = document.createElement('div');
+      noResultsMsg.className = 'no-results-message';
+      catalogList.parentNode.insertBefore(noResultsMsg, catalogList.nextSibling);
+    }
+
+    const checkVisibleItems = () => {
+      const hasVisibleItems = Array.from(catalogList.children).some(child => 
+        !child.hasAttribute('hidden') && 
+        !child.classList.contains('w-dyn-empty') &&
+        getComputedStyle(child).display !== 'none'
+      );
+
+      noResultsMsg.textContent = 'Объекты с такими параметрами не найдены. Попробуйте изменить параметры поиска.';
+      noResultsMsg.style.display = hasVisibleItems ? 'none' : 'block';
+    };
+
+    const observer = new MutationObserver(checkVisibleItems);
+    observer.observe(catalogList, { 
+      childList: true, 
+      subtree: true, 
+      attributes: true,
+      attributeFilter: ['hidden', 'style', 'class']
+    });
+
+    checkVisibleItems();
+  }
+}
+
+// Функции для работы с селектами
+function loadSelectOptions(selectId, fieldName, defaultText) {
+  const select = document.querySelector(selectId);
+  if (!select) return;
+
+  // Создаем Set для хранения уникальных значений
+  const uniqueValues = new Set();
+  
+  // Добавляем значение по умолчанию
+  uniqueValues.add(defaultText);
+  
+  // Получаем все элементы с атрибутом fs-cmsfilter-field
+  document.querySelectorAll(`[fs-cmsfilter-field="${fieldName}"]`).forEach(item => {
+    const value = item.textContent.trim();
+    if (value && value !== defaultText) {
+      // Для поля Type преобразуем английские значения в русские
+      if (fieldName === 'Type') {
+        if (value === 'House') uniqueValues.add('Дом');
+        else if (value === 'Apartment') uniqueValues.add('Апартаменты');
+        else uniqueValues.add(value);
+      } 
+      // Для поля zone (районы) форматируем значения
+      else if (fieldName === 'zone') {
+        if (value.includes('Prague')) {
+          uniqueValues.add(value.trim());
+        }
+      }
+      else {
+        uniqueValues.add(value);
+      }
+    }
+  });
+
+  // Преобразуем Set в массив и сортируем
+  const sortedValues = Array.from(uniqueValues)
+    .filter(value => value !== defaultText) // Удаляем значение по умолчанию из сортировки
+    .sort((a, b) => a.localeCompare(b, 'ru')); // Сортируем с учетом русского языка
+
+  // Очищаем select
+  select.innerHTML = '';
+  
+  // Добавляем опцию по умолчанию первой
+  const defaultOption = document.createElement('option');
+  defaultOption.value = '';
+  defaultOption.textContent = defaultText;
+  select.appendChild(defaultOption);
+
+  // Добавляем остальные отсортированные значения
+  sortedValues.forEach(value => {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = value;
+    select.appendChild(option);
+  });
+}
+// Функция для загрузки опций из CMS
+function loadCMSOptions() {
+  loadSelectOptions('#type', 'Type', 'Все объекты');
+  loadSelectOptions('#category', 'Category', 'Все типы');
+  loadSelectOptions('#district', 'zone', 'Все районы');
+  loadSelectOptions('#rooms', 'Rooms', 'Все варианты');
+}
+
+// Функции для работы с попапами
+function openFilterPopup() {
+  const popup = document.querySelector('.popup-filter');
+  if (popup) {
+    popup.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+  }
+}
+
+function closeFilterPopup() {
+  const popup = document.querySelector('.popup-filter');
+  if (popup) {
+    popup.style.display = 'none';
+    document.body.style.overflow = '';
+  }
+}
+
+function openMapPopup() {
+  const popup = document.querySelector('.popup-map');
+  if (popup) {
+    popup.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    if (!map) {
+      setTimeout(initMap, 100);
+    } else {
+      google.maps.event.trigger(map, 'resize');
+    }
+  }
+}
+
+function closeMapPopup() {
+  const popup = document.querySelector('.popup-map');
+  if (popup) {
+    popup.style.display = 'none';
+    document.body.style.overflow = '';
+  }
+}
+
+// Функции для работы с картой
+function initMap() {
+  isGoogleMapsLoaded = true;
+  updateButtonsState(false);
+  
+  const prague = { lat: 50.0755, lng: 14.4378 };
+  
+  map = new google.maps.Map(document.getElementById('map'), {
+    zoom: 12,
+    center: prague,
+    styles: [{
+      "featureType": "poi",
+      "elementType": "labels",
+      "stylers": [{ "visibility": "off" }]
+    }],
+    mapTypeControl: false,
+    fullscreenControl: false,
+    streetViewControl: false
+  });
+
+  const input = document.getElementById('map-search');
+  if (input) {
+    input.style.display = 'block';
+    const searchBox = new google.maps.places.SearchBox(input);
+
+    map.addListener('bounds_changed', () => {
+      searchBox.setBounds(map.getBounds());
+    });
+
+    searchBox.addListener('places_changed', () => {
+      const places = searchBox.getPlaces();
+      if (places.length === 0) return;
+
+      markers.forEach(marker => marker.setMap(null));
+      
+      const bounds = new google.maps.LatLngBounds();
+      places.forEach(place => {
+        if (!place.geometry || !place.geometry.location) {
+          console.log("Returned place contains no geometry");
+          return;
+        }
+
+        if (place.geometry.viewport) {
+          bounds.union(place.geometry.viewport);
+        } else {
+          bounds.extend(place.geometry.location);
+        }
+      });
+      
+      map.fitBounds(bounds);
+    });
+  }
+
+  setupAutocomplete();
+  loadMarkers();
+}
+
+function setupAutocomplete() {
+  const mapSearchInput = document.getElementById('map-search');
+  const locationInput = document.getElementById('location');
+
+  const autocompleteOptions = {
+    componentRestrictions: { country: 'cz' },
+    types: ['address']
   };
-});
+
+  if (mapSearchInput) {
+    mapAutocomplete = new google.maps.places.Autocomplete(mapSearchInput, autocompleteOptions);
+    mapAutocomplete.addListener('place_changed', () => {
+      const place = mapAutocomplete.getPlace();
+      if (place.geometry) {
+        map.setCenter(place.geometry.location);
+        map.setZoom(15);
+      }
+    });
+  }
+
+  if (locationInput) {
+    autocomplete = new google.maps.places.Autocomplete(locationInput, autocompleteOptions);
+    autocomplete.addListener('place_changed', () => {
+      const place = autocomplete.getPlace();
+      if (place.geometry) {
+        filterByAddress(place.formatted_address);
+      }
+    });
+  }
+}
+
+function loadMarkers() {
+  // Очищаем существующие маркеры
+  markers.forEach(marker => marker.setMap(null));
+  markers = [];
+
+  // Получаем все видимые карточки
+  const cards = document.querySelectorAll('.catalog-card-rent:not([style*="display: none"])');
+  
+  cards.forEach(card => {
+    const cardData = {
+      title: card.querySelector('.catalog-title-rent')?.textContent || '',
+      price: card.querySelector('.catalog-price-rent')?.textContent || '',
+      location: card.querySelector('.catalog-location-rent')?.textContent || '',
+      image: card.querySelector('img')?.src || '',
+      type: card.querySelector('[fs-cmsfilter-field="Type"]')?.textContent || '',
+      rooms: card.querySelector('[fs-cmsfilter-field="Rooms"]')?.textContent || ''
+    };
+
+    if (cardData.location) {
+      createMarkerForCard(cardData);
+    }
+  });
+}
+
+function createMarkerForCard(cardData) {
+  const geocoder = new google.maps.Geocoder();
+  
+  geocoder.geocode({ address: `${cardData.location}, Prague` }, (results, status) => {
+    if (status === 'OK' && results[0]) {
+      const CustomMarker = class extends google.maps.OverlayView {
+        constructor(position, map, price) {
+          super();
+          this.position = position;
+          this.price = price;
+          this.setMap(map);
+        }
+
+        onAdd() {
+          this.div = document.createElement('div');
+          this.div.className = 'custom-marker';
+          this.div.innerHTML = `
+            <div class="marker-price">${this.price}</div>
+          `;
+
+          this.div.style.cssText = `
+            position: absolute;
+            cursor: pointer;
+            width: auto;
+            height: auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 8px 12px;
+            transform: translate(-50%, -100%);
+            white-space: nowrap;
+          `;
+
+          const panes = this.getPanes();
+          panes.overlayMouseTarget.appendChild(this.div);
+
+          this.div.addEventListener('click', () => {
+            markers.forEach(m => m.infoWindow?.close());
+            this.showInfoWindow();
+          });
+        }
+
+        draw() {
+          const overlayProjection = this.getProjection();
+          const position = overlayProjection.fromLatLngToDivPixel(this.position);
+          
+          if (this.div) {
+            this.div.style.left = position.x + 'px';
+            this.div.style.top = position.y + 'px';
+          }
+        }
+
+        onRemove() {
+          if (this.div) {
+            this.div.parentNode.removeChild(this.div);
+            this.div = null;
+          }
+        }
+
+        showInfoWindow() {
+          const infoWindow = new google.maps.InfoWindow({
+            content: `
+              <div class="map-info-window">
+                <h3>${cardData.title}</h3>
+                <p class="location">${cardData.location}</p>
+                <p class="price">${cardData.price}</p>
+                <a href="${cardData.link}" class="info-window-link">Подробнее</a>
+              </div>
+            `
+          });
+
+          infoWindow.setPosition(this.position);
+          infoWindow.open(map);
+          this.infoWindow = infoWindow;
+        }
+      };
+
+      const customMarker = new CustomMarker(results[0].geometry.location, map, cardData.price);
+      markers.push(customMarker);
+    }
+  });
+}
+
+// Функции для фильтрации
+function filterByAddress(address) {
+  if (!address) return;
+
+  const normalizedAddress = address.toLowerCase();
+  const cards = document.querySelectorAll('.catalog-card-rent');
+
+  cards.forEach(card => {
+    const cardLocation = card.querySelector('.catalog-location-rent')?.textContent.toLowerCase() || '';
+    const shouldShow = cardLocation.includes(normalizedAddress) || 
+                      normalizedAddress.includes(cardLocation);
+    
+    card.style.display = shouldShow ? '' : 'none';
+  });
+
+  if (map) {
+    setTimeout(loadMarkers, 100);
+  }
+}
+
+function applyFilters() {
+  const filters = {
+    zone: document.querySelector('#district').value,
+    rooms: document.querySelector('#rooms').value,
+    type: document.querySelector('#type').value,
+    category: document.querySelector('#category').value,
+    priceRange: document.querySelector('#price-range').value,
+    location: document.querySelector('#location').value
+  };
+
+  const cards = document.querySelectorAll('.catalog-card-rent');
+
+  cards.forEach(card => {
+    let showCard = true;
+
+    if (filters.zone) {
+      const cardZone = card.querySelector('[fs-cmsfilter-field="zone"]')?.textContent.trim();
+      if (cardZone !== filters.zone) showCard = false;
+    }
+
+    if (filters.rooms && showCard) {
+      const cardRooms = card.querySelector('[fs-cmsfilter-field="Rooms"]')?.textContent.trim();
+      if (cardRooms !== filters.rooms) showCard = false;
+    }
+
+    if (filters.type && showCard) {
+      const cardType = card.querySelector('[fs-cmsfilter-field="Type"]')?.textContent.trim();
+      if (cardType !== filters.type) showCard = false;
+    }
+
+    if (filters.category && showCard) {
+      const cardCategory = card.querySelector('[fs-cmsfilter-field="Category"]')?.textContent.trim();
+      if (cardCategory !== filters.category) showCard = false;
+    }
+
+    if (filters.location && showCard) {
+      const cardLocation = card.querySelector('.catalog-location-rent')?.textContent.toLowerCase();
+      const searchLocation = filters.location.toLowerCase();
+      if (!cardLocation?.includes(searchLocation)) showCard = false;
+    }
+
+    if (filters.priceRange && showCard) {
+      const priceElement = card.querySelector('.catalog-price-rent');
+      if (priceElement) {
+        const price = parseInt(priceElement.textContent.replace(/\D/g, ''));
+        
+        let showByPrice = false;
+        switch(filters.priceRange) {
+          case '0-25000':
+            showByPrice = price <= 25000;
+            break;
+          case '25000-50000':
+            showByPrice = price > 25000 && price <= 50000;
+            break;
+          case '50000-75000':
+            showByPrice = price > 50000 && price <= 75000;
+            break;
+          case '75000-100000':
+            showByPrice = price > 75000 && price <= 100000;
+            break;
+          case '100000+':
+            showByPrice = price > 100000;
+            break;
+          default:
+            showByPrice = true;
+        }
+
+        if (!showByPrice) showCard = false;
+      }
+    }
+
+    card.style.display = showCard ? '' : 'none';
+  });
+
+  closeFilterPopup();
+  if (map) {
+    setTimeout(loadMarkers, 100);
+  }
+}
+
+function resetFilters() {
+  document.querySelectorAll('select').forEach(select => select.value = '');
+  document.querySelector('#location').value = '';
+  document.querySelectorAll('.catalog-card-rent').forEach(card => {
+    card.style.display = '';
+  });
+  if (map) {
+    loadMarkers();
+  }
+}
+
+// Функция для обновления состояния кнопок
+function updateButtonsState(isLoading) {
+  const buttons = [
+    document.querySelector('.catalog-button-filter'),
+    document.querySelector('.view-map'),
+    document.querySelector('.map-button')
+  ];
+  
+  buttons.forEach(btn => {
+    if (btn) {
+      if (isLoading) {
+        btn.dataset.originalText = btn.textContent;
+        btn.textContent = 'Идет загрузка...';
+        btn.style.opacity = '0.7';
+        btn.style.cursor = 'wait';
+      } else {
+        if (btn.dataset.originalText) {
+          btn.textContent = btn.dataset.originalText;
+        }
+        btn.style.opacity = '';
+        btn.style.cursor = '';
+      }
+    }
+  });
+}
+
+// Создаем экземпляр приложения
+const app = new RealEstateApp();
