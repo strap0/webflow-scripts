@@ -22,32 +22,40 @@ class RealEstateApp {
   }
 
   setupButtons() {
-    const filterBtn = document.querySelector('.catalog-button-filter');
-    const viewMapBtn = document.querySelector('.view-map');
-    const mapButton = document.querySelector('.map-button');
+  const filterBtn = document.querySelector('.catalog-button-filter');
+  const viewMapBtn = document.querySelector('.view-map');
+  const mapButton = document.querySelector('.map-button');
+  const mapCloseBtn = document.querySelector('.popup-map .close-button');
 
-    if (filterBtn) {
-      filterBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        this.openFilterPopup();
-      });
-    }
-
-    if (viewMapBtn) {
-      viewMapBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        this.openMapPopup();
-      });
-    }
-
-    if (mapButton) {
-      mapButton.addEventListener('click', (e) => {
-        e.preventDefault();
-        this.closeFilterPopup();
-        this.openMapPopup();
-      });
-    }
+  if (filterBtn) {
+    filterBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      this.openFilterPopup();
+    });
   }
+
+  if (viewMapBtn) {
+    viewMapBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      this.openMapPopup();
+    });
+  }
+
+  if (mapButton) {
+    mapButton.addEventListener('click', (e) => {
+      e.preventDefault();
+      this.closeFilterPopup();
+      this.openMapPopup();
+    });
+  }
+
+  if (mapCloseBtn) {
+    mapCloseBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      this.closeMapPopup();
+    });
+  }
+}
 
   openFilterPopup() {
     const popup = document.querySelector('.popup-filter');
