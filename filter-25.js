@@ -1,5 +1,6 @@
 
-// аГлобальные переменные
+
+// Глобальные переменные
 let map;
 let markers = [];
 let autocomplete;
@@ -573,400 +574,7 @@ function getCheckedValues(id) {
   return Array.from(document.querySelectorAll(`#${id} input[type="checkbox"]:checked`)).map(cb => cb.value);
 }
 
-// Функция для синхронизации состояния между кнопками и чекбоксами
-function syncDealTypeState(type) {
-  // Обновляем кнопки
-  const rentBtn = document.querySelector('.deal-btn[data-category="Rent"]');
-  const saleBtn = document.querySelector('.deal-btn[data-category="Sale"]');
-  
-  if (rentBtn && saleBtn) {
-    if (type === 'Rent') {
-      rentBtn.classList.add('active');
-      saleBtn.classList.remove('active');
-    } else if (type === 'Sale') {
-      saleBtn.classList.add('active');
-      rentBtn.classList.remove('active');
-    }
-  }
-
-  // Обновляем чекбоксы в попапе
-  const categoryCheckboxes = document.querySelectorAll('#category input[type="checkbox"]');
-  categoryCheckboxes.forEach(checkbox => {
-    checkbox.checked = checkbox.value === type;
-  });
-
-  // Фильтруем карточки
-  filterCardsByDealType(type);
-}
-
-// Обновленная функция filterCardsByDealType
-function filterCardsByDealType(type) {
-  const cards = document.querySelectorAll('[fs-cmsfilter-element="item"]');
-  cards.forEach(card => {
-    const categoryElement = card.querySelector('[fs-cmsfilter-field="Category"]');
-    if (!categoryElement) return;
-    
-    // Используем data-original для правильного сравнения
-    const cardCategory = categoryElement.dataset.original || categoryElement.textContent.trim();
-    
-    if (type === 'all' || cardCategory === type) {
-      card.style.display = '';
-      card.classList.remove('is-hidden');
-    } else {
-      card.style.display = 'none';
-      card.classList.add('is-hidden');
-    }
-  });
-}
-
-// Обновляем функцию openFilterPopup
-function openFilterPopup() {
-  const popup = document.querySelector('.popup-filter');
-  if (popup) {
-    popup.style.display = 'flex';
-    document.body.style.overflow = 'hidden';
-    
-    // Инициализируем все селекты
-    fillDistrictOptions();
-    fillRoomsOptions();
-    fillPriceRangeOptions();
-    loadCMSOptions();
-    
-    // Синхронизируем состояние с активной кнопкой
-    const activeBtn = document.querySelector('.deal-btn.active');
-    if (activeBtn) {
-      const dealType = activeBtn.dataset.category;
-      syncDealTypeState(dealType);
-    } else {
-      // По умолчанию выбираем Rent
-      syncDealTypeState('Rent');
-    }
-
-    // Восстанавливаем остальные фильтры
-    restoreFilterState();
-
-    // Обработчик для кнопки "Показать объявления"
-    const showBtn = document.querySelector('.show-results');
-    if (showBtn) {
-      showBtn.onclick = function() {
-        // Получаем выбранную категорию из чекбоксов
-        const checkedCategory = Array.from(document.querySelectorAll('#category input[type="checkbox"]:checked'))
-          .map(cb => cb.value)[0];
-        
-        // Синхронизируем состояние перед применением фильтров
-        if (checkedCategory) {
-          syncDealTypeState(checkedCategory);
-        }
-        
-        applyFilters();
-      };
-    }
-  }
-}
-
-function closeFilterPopup() {
-  const popup = document.querySelector('.popup-filter');
-  if (popup) {
-    popup.style.display = 'none';
-    document.body.style.overflow = '';
-  }
-}
-
-function openMapPopup(visibleCards = []) {
-  const popup = document.querySelector('.popup-map');
-  if (popup) {
-    popup.style.display = 'flex';
-    document.body.style.overflow = 'hidden';
-
-    if (!map && typeof google !== 'undefined') {
-      setTimeout(() => initMap(visibleCards), 100);
-    } else if (map) {
-      google.maps.event.trigger(map, 'resize');
-      setTimeout(() => loadMarkers(visibleCards), 100);
-    }
-  }
-}
-
-function closeMapPopup() {
-  const popup = document.querySelector('.popup-map');
-  if (popup) {
-    popup.style.display = 'none';
-    document.body.style.overflow = '';
-  }
-  removeGlobalPopupAndActiveMarker();
-}
-
-// Функции для работы с картой
-function initMap(visibleCards = []) {
-  isGoogleMapsLoaded = true;
-  updateButtonsState(false);
-
-  const prague = { lat: 50.0755, lng: 14.4378 };
-
-  map = new google.maps.Map(document.getElementById('map'), {
-  zoom: 12,
-  center: prague,
-  styles: [{
-    featureType: 'poi',
-    elementType: 'labels',
-    stylers: [{ visibility: 'off' }]
-  }],
-  mapTypeControl: false,
-  fullscreenControl: false,
-  streetViewControl: false,
-  gestureHandling: 'greedy' // ✅ ЭТО ДОБАВЛЯЕТ ОДНОПАЛЬЦЕВОЕ ПЕРЕМЕЩЕНИЕ
-});
-
-  setupAutocomplete();
-  setTimeout(() => loadMarkers(visibleCards), 100); // добавляем задержку
-}
-
-function setupAutocomplete() {
-  const mapSearchInput = document.getElementById('map-search');
-  const locationInput = document.getElementById('location');
-
-  const autocompleteOptions = {
-    componentRestrictions: { country: 'cz' },
-    types: ['address']
-  };
-
-  if (mapSearchInput) {
-    mapAutocomplete = new google.maps.places.Autocomplete(mapSearchInput, autocompleteOptions);
-    mapAutocomplete.addListener('place_changed', () => {
-      const place = mapAutocomplete.getPlace();
-      if (place.geometry) {
-        map.setCenter(place.geometry.location);
-        map.setZoom(15);
-      }
-    });
-  }
-
- if (locationInput) {
-  autocomplete = new google.maps.places.Autocomplete(locationInput, autocompleteOptions);
-  autocomplete.addListener('place_changed', () => {
-    // Убираем автоматическую фильтрацию, чтобы фильтр применялся только по кнопке
-    const place = autocomplete.getPlace();
-    // Можно сохранить адрес, если захочешь использовать позже вручную
-    // filters.location = place.formatted_address;
-  });
-}
-}
-
-  function loadMarkers(visibleCards = []) {
-    // Полная очистка всех маркеров
-    clearAllMarkers();
-  
-    // Получаем карточки для отображения на карте
-    const cards = visibleCards.length
-      ? visibleCards
-      : Array.from(document.querySelectorAll('.catalog-card-rent:not(.is-hidden)'));
-  
-    // Создаем массив для хранения промисов геокодирования
-    const geocodePromises = [];
-  
-    cards.forEach(card => {
-      const cardData = {
-        title: card.querySelector('.catalog-title-rent')?.textContent || '',
-        price: card.querySelector('.catalog-price-rent')?.textContent || '',
-        location: card.querySelector('.catalog-location-rent')?.textContent || '',
-        image: card.querySelector('img')?.src || '',
-        type: card.querySelector('[fs-cmsfilter-field="Type"]')?.textContent || '',
-        rooms: card.querySelector('[fs-cmsfilter-field="Rooms"]')?.textContent || '',
-        link: card.querySelector('a')?.href || '#'
-      };
-  
-      if (cardData.location) {
-        const promise = new Promise((resolve) => {
-          const geocoder = new google.maps.Geocoder();
-  geocoder.geocode({ address: `${cardData.location}, Prague` }, (results, status) => {
-            if (status === 'OK' && results[0]) {
-              resolve({ ...cardData, position: results[0].geometry.location });
-            } else {
-              resolve(null);
-            }
-          });
-        });
-        geocodePromises.push(promise);
-      }
-    });
-  
-    // Ждем завершения всех геокодирований
-    Promise.all(geocodePromises).then(results => {
-      results.filter(cardData => cardData && cardData.position).forEach(cardData => {
-        createMarkerForCard(cardData);
-      });
-    });
-  }
-  
-  // Функция для полной очистки всех маркеров
-  function clearAllMarkers() {
-    markers.forEach(marker => {
-      if (marker.setMap) {
-        marker.setMap(null);
-      }
-      if (marker.onRemove) {
-        marker.onRemove();
-      }
-    });
-    markers = [];
-  }
-  
-  // --- ДОБАВЛЯЕМ SVG КРЕСТИК ---
-  const CROSS_SVG = `<img src="https://cdn.prod.website-files.com/67c42e66e687338b49c89be5/67f13f5731b69e4194170692_cross.svg" alt="Закрыть" style="width:24px;height:24px;display:block;">`;
-
-  // Обновленная функция создания маркера
-  function createMarkerForCard(cardData) {
-    if (!cardData || !cardData.position) return;
-  
-    const wrapper = document.createElement('div');
-    wrapper.innerHTML = `
-      <div class="map-marker-wrapper">
-        <div class="map-marker">
-          ${formatPrice(cardData.price)}
-          <div class="marker-pointer"></div>
-        </div>
-        <div class="property-popup">
-          <div class="popup-content">
-            <img src="${cardData.image}" alt="${cardData.title}">
-            <div class="popup-info">
-              <div class="property-type">${cardData.type} • ${cardData.rooms}</div>
-              <div class="address">${cardData.location}</div>
-              <div class="price">${cardData.price}</div>
-            </div>
-          </div>
-          <button class="popup-close-btn" style="position:absolute;top:8px;right:12px;background:none;border:none;padding:0;cursor:pointer;z-index:10;">${CROSS_SVG}</button>
-        </div>
-      </div>
-    `;
-
-    const markerDiv = wrapper.firstElementChild;
-    const markerBox = markerDiv.querySelector('.map-marker');
-    const popup = markerDiv.querySelector('.property-popup');
-    const closeBtn = markerDiv.querySelector('.popup-close-btn');
-    const markerWrapper = markerDiv;
-
-    let isPopupPinned = false;
-    let hideTimer;
-
-    // --- Закрыть все попапы и снять активность со всех меток ---
-    function closeAllPopupsExceptCurrent() {
-      document.querySelectorAll('.property-popup.show').forEach(p => {
-        if (p !== popup) p.classList.remove('show');
-      });
-      document.querySelectorAll('.map-marker-wrapper.is-active').forEach(w => {
-        if (w !== markerWrapper) w.classList.remove('is-active');
-      });
-    }
-
-    // --- Десктоп: Наведение ---
-    const showPopup = () => {
-      clearTimeout(hideTimer);
-      if (!popup.classList.contains('show')) popup.classList.add('show');
-      markerDiv.style.zIndex = '99999';
-      markerWrapper.classList.add('is-active');
-    };
-    const hidePopupDelayed = () => {
-      if (isPopupPinned) return;
-      hideTimer = setTimeout(() => {
-        popup.classList.remove('show');
-        markerDiv.style.zIndex = '1';
-        markerWrapper.classList.remove('is-active');
-      }, 300);
-    };
-
-    // --- Десктоп: Клик ---
-    markerBox.addEventListener('click', (e) => {
-      if (window.innerWidth > 767) {
-        e.stopPropagation();
-        if (cardData.link) {
-          window.open(cardData.link, '_blank');
-          return;
-        }
-      } else {
-        // Мобильная логика (оставляем как было)
-        showGlobalPopup(cardData, markerBox);
-      }
-    });
-
-    // --- Наведение только для десктопа ---
-    markerBox.addEventListener('mouseenter', () => { if (window.innerWidth > 767) showPopup(); });
-    markerBox.addEventListener('mouseleave', () => { if (window.innerWidth > 767) hidePopupDelayed(); });
-    popup.addEventListener('mouseenter', () => { if (window.innerWidth > 767) showPopup(); });
-    popup.addEventListener('mouseleave', () => { if (window.innerWidth > 767) hidePopupDelayed(); });
-
-    // --- Клик по попапу открывает карточку (и десктоп, и мобила) ---
-    if (cardData.link) {
-      popup.addEventListener('click', (e) => {
-        if (e.target.closest('.popup-close-btn')) return;
-        window.open(cardData.link, '_blank');
-      });
-    }
-
-    // --- Крестик закрытия ---
-    closeBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      isPopupPinned = false;
-      popup.classList.remove('show');
-      markerDiv.style.zIndex = '1';
-      markerWrapper.classList.remove('is-active');
-    });
-
-    // --- Мобильная версия: клик по попапу открывает карточку ---
-    // (уже реализовано выше)
-
-    const overlay = new google.maps.OverlayView();
-    overlay.onAdd = function() {
-      this.div = markerDiv;
-      const panes = this.getPanes();
-      panes.overlayMouseTarget.appendChild(this.div);
-    };
-    overlay.draw = function() {
-      if (!this.div) return;
-      const projection = this.getProjection();
-      const positionPx = projection.fromLatLngToDivPixel(cardData.position);
-      if (positionPx) {
-        this.div.style.left = `${positionPx.x}px`;
-        this.div.style.top = `${positionPx.y}px`;
-        this.div.style.position = 'absolute';
-        this.div.style.transform = 'translate(-50%, -100%)';
-      }
-    };
-    overlay.onRemove = function() {
-      if (this.div && this.div.parentNode) {
-        this.div.parentNode.removeChild(this.div);
-      }
-      this.div = null;
-    };
-    google.maps.event.addListener(map, 'dragend', () => {
-      overlay.draw();
-    });
-    google.maps.event.addListener(map, 'zoom_changed', () => {
-      overlay.draw();
-    });
-    overlay.setMap(map);
-    markers.push(overlay);
-}
-  
-// Функции для фильтрации
-function filterByAddress(address) {
-  if (!address) return;
-
-  const normalizedAddress = address.toLowerCase();
-  const cards = document.querySelectorAll('.catalog-card-rent');
-
-  cards.forEach(card => {
-    const cardLocation = card.querySelector('.catalog-location-rent')?.textContent.toLowerCase() || '';
-    const shouldShow = cardLocation.includes(normalizedAddress) || 
-                      normalizedAddress.includes(cardLocation);
-    
-    card.style.display = shouldShow ? '' : 'none';
-  });
-
-  if (map) {
-    setTimeout(loadMarkers, 100);
-  }
-}
-
+// Обновляем функцию applyFilters
 function applyFilters() {
   const filters = {
     category: Array.from(document.querySelectorAll('#category input[type="checkbox"]:checked')).map(cb => cb.value),
@@ -977,19 +585,27 @@ function applyFilters() {
     priceRange: window.priceRangeChoices ? window.priceRangeChoices.getValue().map(v => v.value) : []
   };
 
+  // Показываем все карточки перед фильтрацией
+  document.querySelectorAll('[fs-cmsfilter-element="item"]').forEach(card => {
+    card.style.display = '';
+    card.classList.remove('is-hidden');
+  });
+
   // Фильтруем карточки
   document.querySelectorAll('[fs-cmsfilter-element="item"]').forEach(card => {
     let show = true;
 
-    // Проверяем категорию
+    // Проверяем категорию только если она выбрана
     if (filters.category.length > 0) {
-      const cardCategory = card.querySelector('[fs-cmsfilter-field="Category"]')?.textContent.trim();
+      const categoryElement = card.querySelector('[fs-cmsfilter-field="Category"]');
+      const cardCategory = categoryElement?.dataset.original || categoryElement?.textContent.trim();
       if (!filters.category.includes(cardCategory)) show = false;
     }
 
     // Проверяем тип недвижимости
     if (show && filters.type.length > 0) {
-      const cardType = card.querySelector('[fs-cmsfilter-field="Type"]')?.textContent.trim();
+      const typeElement = card.querySelector('[fs-cmsfilter-field="Type"]');
+      const cardType = typeElement?.dataset.original || typeElement?.textContent.trim();
       if (!filters.type.includes(cardType)) show = false;
     }
 
@@ -1018,10 +634,11 @@ function applyFilters() {
       
       let priceInRange = false;
       filters.priceRange.forEach(range => {
-        const [min, max] = range.split('-').map(v => parseInt(v));
         if (range.includes('+')) {
-          if (price >= min) priceInRange = true;
+          const minPrice = parseInt(range.replace('+', ''));
+          if (price >= minPrice) priceInRange = true;
         } else {
+          const [min, max] = range.split('-').map(v => parseInt(v));
           if (price >= min && price <= max) priceInRange = true;
         }
       });
@@ -1029,6 +646,7 @@ function applyFilters() {
       if (!priceInRange) show = false;
     }
 
+    card.style.display = show ? '' : 'none';
     card.classList.toggle('is-hidden', !show);
   });
 
@@ -1036,58 +654,121 @@ function applyFilters() {
   closeFilterPopup();
 }
 
-// Функция для сброса фильтров
+// Обновляем функцию syncDealTypeState
+function syncDealTypeState(type) {
+  // Обновляем кнопки
+  const rentBtn = document.querySelector('.deal-btn[data-category="Rent"]');
+  const saleBtn = document.querySelector('.deal-btn[data-category="Sale"]');
+  
+  if (rentBtn && saleBtn) {
+    if (type === 'Rent') {
+      rentBtn.classList.add('active');
+      saleBtn.classList.remove('active');
+    } else if (type === 'Sale') {
+      saleBtn.classList.add('active');
+      rentBtn.classList.remove('active');
+    } else {
+      // Если тип не указан, снимаем активное состояние с обеих кнопок
+      rentBtn.classList.remove('active');
+      saleBtn.classList.remove('active');
+    }
+  }
+
+  // Обновляем чекбоксы в попапе
+  const categoryCheckboxes = document.querySelectorAll('#category input[type="checkbox"]');
+  categoryCheckboxes.forEach(checkbox => {
+    checkbox.checked = checkbox.value === type;
+  });
+
+  // Фильтруем карточки только если указан тип
+  if (type) {
+    document.querySelectorAll('[fs-cmsfilter-element="item"]').forEach(card => {
+      const categoryElement = card.querySelector('[fs-cmsfilter-field="Category"]');
+      if (!categoryElement) return;
+      
+      const cardCategory = categoryElement.dataset.original || categoryElement.textContent.trim();
+      const show = cardCategory === type;
+      
+      card.style.display = show ? '' : 'none';
+      card.classList.toggle('is-hidden', !show);
+    });
+  } else {
+    // Если тип не указан, показываем все карточки
+    document.querySelectorAll('[fs-cmsfilter-element="item"]').forEach(card => {
+      card.style.display = '';
+      card.classList.remove('is-hidden');
+    });
+  }
+}
+
+// Обновляем обработчик DOMContentLoaded
+document.addEventListener('DOMContentLoaded', function() {
+  const rentBtn = document.querySelector('.deal-btn[data-category="Rent"]');
+  const saleBtn = document.querySelector('.deal-btn[data-category="Sale"]');
+
+  if (rentBtn && saleBtn) {
+    // Сначала показываем все карточки
+    document.querySelectorAll('[fs-cmsfilter-element="item"]').forEach(card => {
+      card.style.display = '';
+      card.classList.remove('is-hidden');
+    });
+
+    rentBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      syncDealTypeState('Rent');
+    });
+
+    saleBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      syncDealTypeState('Sale');
+    });
+
+    // Проверяем URL параметры
+    const urlParams = new URLSearchParams(window.location.search);
+    const categoryParam = urlParams.get('category');
+
+    if (categoryParam === 'Sale') {
+      syncDealTypeState('Sale');
+    } else if (categoryParam === 'Rent') {
+      syncDealTypeState('Rent');
+    } else {
+      // Если категория не указана в URL, показываем все
+      syncDealTypeState(null);
+    }
+  }
+
+  // Инициализируем компоненты
+  fillDistrictOptions();
+  fillRoomsOptions();
+  fillPriceRangeOptions();
+  loadCMSOptions();
+});
+
+// Обновляем функцию resetFilters
 function resetFilters() {
   // Сбросить обычные чекбоксы
   document.querySelectorAll('.checkbox-group input[type="checkbox"]').forEach(cb => cb.checked = false);
-  // Сбросить multiselect для district, rooms, price-range
+  
+  // Сбросить multiselect
   if (window.districtChoices) window.districtChoices.removeActiveItems();
   if (window.roomsChoices) window.roomsChoices.removeActiveItems();
   if (window.priceRangeChoices) window.priceRangeChoices.removeActiveItems();
 
+  // Сбросить поле адреса
   const locationInput = document.querySelector('#location');
   if (locationInput) locationInput.value = '';
 
-  sessionStorage.removeItem('filterState'); // Очищаем сохраненное состояние
+  // Очистить сохраненное состояние
+  sessionStorage.removeItem('filterState');
 
-  document.querySelectorAll('.catalog-card-rent, [fs-cmsfilter-element="item"]').forEach(card => {
+  // Показать все карточки
+  document.querySelectorAll('[fs-cmsfilter-element="item"]').forEach(card => {
+    card.style.display = '';
     card.classList.remove('is-hidden');
   });
 
-  if (typeof updatePaginationAfterFilter === 'function') updatePaginationAfterFilter();
+  // Обновить карту если есть
   if (window.map) loadMarkers();
-}
-
-  // Перезагружаем маркеры на карте (если включена карта)
-  if (map) {
-    loadMarkers();
-  }
-
-
-// Функция для обновления состояния кнопок
-function updateButtonsState(isLoading) {
-  const buttons = [
-    document.querySelector('.catalog-button-filter'),
-    document.querySelector('.view-map'),
-    document.querySelector('.map-button')
-  ];
-  
-  buttons.forEach(btn => {
-    if (btn) {
-      if (isLoading) {
-        btn.dataset.originalText = btn.textContent;
-        btn.textContent = 'Loading ...';
-        btn.style.opacity = '0.7';
-        btn.style.cursor = 'wait';
-      } else {
-        if (btn.dataset.originalText) {
-          btn.textContent = btn.dataset.originalText;
-        }
-        btn.style.opacity = '';
-        btn.style.cursor = '';
-      }
-    }
-  });
 }
 
 function closeMapPopup() {
@@ -1812,4 +1493,5 @@ languageObserver.observe(document.documentElement, {
   attributes: true,
   attributeFilter: ['lang']
 });
+
 
