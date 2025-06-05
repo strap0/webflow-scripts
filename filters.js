@@ -499,7 +499,7 @@ function loadCMSOptions() {
 }
 
 // Обновленная функция updatePriceRangeOptions
-function updatePriceRangeOptions(categories) {
+function updatePriceRangeOptions() {
   const lang = getCurrentLanguage();
   const priceRange = document.querySelector('#price-range-multiselect');
   if (!priceRange) return;
@@ -512,11 +512,7 @@ function updatePriceRangeOptions(categories) {
   // Очищаем селект
   priceRange.innerHTML = '';
 
-  let cats = Array.isArray(categories) ? categories : [categories];
-  const showRent = cats.includes('Rent');
-  const showSale = cats.includes('Sale');
-
-  // Функция для добавления опций с учетом языка
+  // Добавляем все опции для аренды и продажи
   function addOptions(options) {
     options.forEach(opt => {
       const option = document.createElement('option');
@@ -526,15 +522,9 @@ function updatePriceRangeOptions(categories) {
     });
   }
 
-  // Добавляем опции в зависимости от выбранных категорий
-  if (showSale && !showRent) {
-    addOptions(priceRangeTranslations.sale);
-  } else if (showRent && !showSale) {
-    addOptions(priceRangeTranslations.rent);
-  } else if (showRent && showSale) {
-    addOptions(priceRangeTranslations.rent);
-    addOptions(priceRangeTranslations.sale);
-  }
+  // Добавляем сначала опции для аренды, потом для продажи
+  addOptions(priceRangeTranslations.rent);
+  addOptions(priceRangeTranslations.sale);
 
   // Создаем новый экземпляр Choices.js
   window.priceRangeChoices = new Choices(priceRange, {
@@ -1235,7 +1225,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Обработчик изменения селекта категорий в попапе
   if (categorySelect) {
     categorySelect.addEventListener('change', () => {
-      updatePriceRangeOptions(getCheckedValues('category'));
+      updatePriceRangeOptions();
       const value = categorySelect.value;
       const matchingBtn = document.querySelector(`.deal-btn[data-category="${value}"]`);
       if (matchingBtn) {
@@ -1243,7 +1233,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
     // Инициализация при загрузке
-    updatePriceRangeOptions(getCheckedValues('category'));
+    updatePriceRangeOptions();
   }
 
   buttons.forEach(btn => {
@@ -1387,15 +1377,7 @@ document.addEventListener('DOMContentLoaded', function() {
     itemSelectText: '',
     renderSelectedChoices: 'auto',
   });
-  window.priceRangeChoices = new Choices('#price-range-multiselect', {
-    removeItemButton: true,
-    searchEnabled: false,
-    placeholder: true,
-    placeholderValue: 'Select price range',
-    shouldSort: false,
-    itemSelectText: '',
-    renderSelectedChoices: 'auto',
-  });
+  updatePriceRangeOptions(); // Обновляем вместо создания нового экземпляра
 });
 
 // === ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ===
