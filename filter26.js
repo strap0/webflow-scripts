@@ -1,6 +1,6 @@
 
 
-// Г-лобальные переменные
+// Глобальные переменные
 let map;
 let markers = [];
 let autocomplete;
@@ -1618,4 +1618,185 @@ languageObserver.observe(document.documentElement, {
   attributes: true,
   attributeFilter: ['lang']
 });
+
+// Функции для работы с попапом
+function openFilterPopup() {
+  const popup = document.querySelector('.popup-filter');
+  if (popup) {
+    popup.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    restoreFilterState(); // Восстанавливаем состояние фильтров
+  }
+}
+
+function closeFilterPopup() {
+  const popup = document.querySelector('.popup-filter');
+  if (popup) {
+    popup.style.display = 'none';
+    document.body.style.overflow = '';
+  }
+}
+
+// Функция для настройки попапа и кнопок
+function setupPopupAndButtons() {
+  // Кнопки открытия фильтра
+  const filterButtons = document.querySelectorAll('.catalog-button-filter, .catalog-button-title');
+  filterButtons.forEach(btn => {
+    if (btn) {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        openFilterPopup();
+      });
+    }
+  });
+
+  // Кнопка закрытия
+  const closeButton = document.querySelector('.popup-filter .close-button');
+  if (closeButton) {
+    closeButton.addEventListener('click', () => {
+      closeFilterPopup();
+    });
+  }
+
+  // Закрытие по клику вне попапа
+  const popup = document.querySelector('.popup-filter');
+  if (popup) {
+    popup.addEventListener('click', (e) => {
+      if (e.target === popup) {
+        closeFilterPopup();
+      }
+    });
+  }
+
+  // Кнопка "Показать объявления"
+  const showResultsBtn = document.querySelector('.show-results');
+  if (showResultsBtn) {
+    showResultsBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      applyFilters();
+    });
+  }
+
+  // Кнопка "Сбросить фильтры"
+  const resetBtn = document.querySelector('.reset-filters');
+  if (resetBtn) {
+    resetBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      resetFilters();
+    });
+  }
+
+  // Escape для закрытия попапа
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      closeFilterPopup();
+    }
+  });
+}
+
+// Обновляем основной обработчик загрузки страницы
+document.addEventListener('DOMContentLoaded', function() {
+  console.log('DOM loaded, initializing...');
+
+  // Инициализируем попап и кнопки
+  setupPopupAndButtons();
+
+  // Инициализируем фильтры
+  initFilters();
+
+  // Восстанавливаем состояние фильтров
+  restoreFilterState();
+
+  // Показываем все карточки при загрузке
+  showAllCards();
+});
+
+// Функция инициализации фильтров
+function initFilters() {
+  // Инициализация мультиселектов
+  initChoices();
+
+  // Инициализация чекбоксов
+  ['category', 'type'].forEach(group => {
+    const checkboxes = document.querySelectorAll(`#${group} input[type="checkbox"]`);
+    checkboxes.forEach(checkbox => {
+      checkbox.addEventListener('change', function() {
+        console.log(`${group} checkbox changed:`, this.value, this.checked);
+        if (group === 'category') {
+          updatePriceRangeOptions([this.value]);
+        }
+      });
+    });
+  });
+}
+
+// Функция для показа всех карточек
+function showAllCards() {
+  const cards = document.querySelectorAll('[fs-cmsfilter-element="item"]');
+  cards.forEach(card => {
+    card.style.display = '';
+    card.classList.remove('is-hidden');
+  });
+}
+
+// Обновляем функцию applyFilters
+function applyFilters() {
+  console.log('Applying filters...');
+  
+  const filters = {
+    category: Array.from(document.querySelectorAll('#category input[type="checkbox"]:checked')).map(cb => cb.value),
+    type: Array.from(document.querySelectorAll('#type input[type="checkbox"]:checked')).map(cb => cb.value),
+    district: window.districtChoices ? window.districtChoices.getValue().map(choice => choice.value) : [],
+    rooms: window.roomsChoices ? window.roomsChoices.getValue().map(choice => choice.value) : [],
+    priceRange: window.priceRangeChoices ? window.priceRangeChoices.getValue() : []
+  };
+
+  console.log('Current filters:', filters);
+
+  const cards = document.querySelectorAll('[fs-cmsfilter-element="item"]');
+  let hasVisibleCards = false;
+
+  cards.forEach(card => {
+    let show = true;
+
+    // Проверяем категорию
+    if (filters.category.length > 0) {
+      const categoryElement = card.querySelector('[fs-cmsfilter-field="Category"]');
+      const cardCategory = categoryElement ? (categoryElement.dataset.original || categoryElement.textContent.trim()) : null;
+      if (!cardCategory || !filters.category.includes(cardCategory)) {
+        show = false;
+      }
+    }
+
+    // Проверяем тип недвижимости
+    if (show && filters.type.length > 0) {
+      const typeElement = card.querySelector('[fs-cmsfilter-field="Type"]');
+      const cardType = typeElement ? (typeElement.dataset.original || typeElement.textContent.trim()) : null;
+      if (!cardType || !filters.type.includes(cardType)) {
+        show = false;
+      }
+    }
+
+    // Применяем видимость
+    if (show) {
+      card.style.display = '';
+      card.classList.remove('is-hidden');
+      hasVisibleCards = true;
+    } else {
+      card.style.display = 'none';
+      card.classList.add('is-hidden');
+    }
+  });
+
+  // Показываем сообщение если нет результатов
+  const noResultsMessage = document.querySelector('.no-results-message');
+  if (noResultsMessage) {
+    noResultsMessage.style.display = hasVisibleCards ? 'none' : 'block';
+  }
+
+  // Сохраняем состояние и закрываем попап
+  saveFilterState();
+  closeFilterPopup();
+}
+
 
