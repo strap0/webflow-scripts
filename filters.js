@@ -1,4 +1,3 @@
-<script>
 
 // Глобальные переменные
 let map;
@@ -1644,4 +1643,4 @@ observer.observe(document.documentElement, {
   attributeFilter: ['lang']
 });
 
-</script>
+
