@@ -1,4 +1,23 @@
-<script>
+
+// Добавляем CSS для Choices.js
+const choicesCSS = document.createElement('link');
+choicesCSS.rel = 'stylesheet';
+choicesCSS.href = 'https://cdn.jsdelivr.net/npm/choices.js@9.0.1/public/assets/styles/choices.min.css';
+document.head.appendChild(choicesCSS);
+
+// Добавляем JavaScript для Choices.js
+const choicesScript = document.createElement('script');
+choicesScript.src = 'https://cdn.jsdelivr.net/npm/choices.js@9.0.1/public/assets/scripts/choices.min.js';
+choicesScript.onload = function() {
+  console.log('Choices.js loaded successfully');
+  // После загрузки Choices.js инициализируем селекты
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    fillDistrictOptions();
+    fillRoomsOptions();
+    fillPriceRangeOptions();
+  }
+};
+document.head.appendChild(choicesScript);
 
 // Глобальные переменные
 let map;
@@ -1400,9 +1419,23 @@ function fillPriceRangeOptions() {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-  fillDistrictOptions();
-  fillRoomsOptions();
-  fillPriceRangeOptions(); // Теперь эта функция полностью отвечает за инициализацию price range
+  // Проверяем, загружен ли Choices.js
+  if (typeof Choices !== 'undefined') {
+    fillDistrictOptions();
+    fillRoomsOptions();
+    fillPriceRangeOptions();
+  } else {
+    console.log('Waiting for Choices.js to load...');
+    // Ждем загрузки Choices.js
+    const checkChoices = setInterval(() => {
+      if (typeof Choices !== 'undefined') {
+        clearInterval(checkChoices);
+        fillDistrictOptions();
+        fillRoomsOptions();
+        fillPriceRangeOptions();
+      }
+    }, 100);
+  }
 
   // Инициализация остальных селектов
   window.districtChoices = new Choices('#district-multiselect', {
@@ -1644,4 +1677,4 @@ observer.observe(document.documentElement, {
   attributeFilter: ['lang']
 });
 
-</script>
+
