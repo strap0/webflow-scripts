@@ -1,4 +1,4 @@
-
+<script>
 
 // Глобальные переменные
 let map;
@@ -1339,26 +1339,72 @@ function fillRoomsOptions() {
 
 function fillPriceRangeOptions() {
   const select = document.getElementById('price-range-multiselect');
+  if (!select) {
+    console.error('Price range select element not found');
+    return;
+  }
+  
+  const lang = getCurrentLanguage();
   select.innerHTML = '';
-  [
-    { value: '0-25000', text: 'Up to 25 000 CZK/mo' },
-    { value: '25000-50000', text: '25 000 – 50 000 CZK/mo' },
-    { value: '50000-75000', text: '50 000 – 75 000 CZK/mo' },
-    { value: '75000-100000', text: '75 000 – 100 000 CZK/mo' },
-    { value: '100000+', text: 'Over 100 000 CZK/mo' }
-  ].forEach(opt => {
+
+  // Добавляем опции для аренды
+  const rentOptgroup = document.createElement('optgroup');
+  rentOptgroup.label = {
+    en: 'Rent',
+    cs: 'Pronájem',
+    ru: 'Аренда'
+  }[lang] || 'Rent';
+
+  priceRangeTranslations.rent.forEach(opt => {
     const option = document.createElement('option');
     option.value = opt.value;
-    option.textContent = opt.text;
-    select.appendChild(option);
+    option.textContent = opt.text[lang] || opt.text.en;
+    rentOptgroup.appendChild(option);
+  });
+  select.appendChild(rentOptgroup);
+
+  // Добавляем опции для продажи
+  const saleOptgroup = document.createElement('optgroup');
+  saleOptgroup.label = {
+    en: 'Sale',
+    cs: 'Prodej',
+    ru: 'Продажа'
+  }[lang] || 'Sale';
+
+  priceRangeTranslations.sale.forEach(opt => {
+    const option = document.createElement('option');
+    option.value = opt.value;
+    option.textContent = opt.text[lang] || opt.text.en;
+    saleOptgroup.appendChild(option);
+  });
+  select.appendChild(saleOptgroup);
+
+  // Инициализируем Choices.js
+  if (window.priceRangeChoices) {
+    window.priceRangeChoices.destroy();
+  }
+
+  window.priceRangeChoices = new Choices(select, {
+    removeItemButton: true,
+    searchEnabled: false,
+    placeholder: true,
+    placeholderValue: {
+      en: 'Select price range',
+      cs: 'Vyberte cenové rozpětí',
+      ru: 'Выберите ценовой диапазон'
+    }[lang] || 'Select price range',
+    shouldSort: false,
+    itemSelectText: '',
+    renderSelectedChoices: 'auto'
   });
 }
 
 document.addEventListener('DOMContentLoaded', function() {
   fillDistrictOptions();
   fillRoomsOptions();
-  fillPriceRangeOptions();
-  // Инициализация Choices.js с английскими плейсхолдерами
+  fillPriceRangeOptions(); // Теперь эта функция полностью отвечает за инициализацию price range
+
+  // Инициализация остальных селектов
   window.districtChoices = new Choices('#district-multiselect', {
     removeItemButton: true,
     searchEnabled: true,
@@ -1366,8 +1412,9 @@ document.addEventListener('DOMContentLoaded', function() {
     placeholderValue: 'Select districts',
     shouldSort: false,
     itemSelectText: '',
-    renderSelectedChoices: 'auto', // placeholder только если ничего не выбрано
+    renderSelectedChoices: 'auto'
   });
+
   window.roomsChoices = new Choices('#rooms-multiselect', {
     removeItemButton: true,
     searchEnabled: true,
@@ -1375,9 +1422,8 @@ document.addEventListener('DOMContentLoaded', function() {
     placeholderValue: 'Select rooms',
     shouldSort: false,
     itemSelectText: '',
-    renderSelectedChoices: 'auto',
+    renderSelectedChoices: 'auto'
   });
-  updatePriceRangeOptions(); // Обновляем вместо создания нового экземпляра
 });
 
 // === ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ===
@@ -1590,7 +1636,7 @@ document.addEventListener('DOMContentLoaded', () => {
 const observer = new MutationObserver(() => {
   console.log('[localize] Language changed');
   localizeFilterUI();
-  initChoices(); // Переинициализируем Choices.js при смене языка
+  fillPriceRangeOptions(); // Обновляем price range при смене языка
 });
 
 observer.observe(document.documentElement, {
@@ -1598,4 +1644,4 @@ observer.observe(document.documentElement, {
   attributeFilter: ['lang']
 });
 
-
+</script>
