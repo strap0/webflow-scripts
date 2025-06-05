@@ -1,3 +1,5 @@
+
+
 // Глобальные переменные
 let map;
 let markers = [];
@@ -572,11 +574,14 @@ function openFilterPopup() {
   if (popup) {
     popup.style.display = 'flex';
     document.body.style.overflow = 'hidden';
-    loadCMSOptions();
-    restoreFilterState();
+    
+    // Инициализируем селекты с задержкой после открытия попапа
     setTimeout(() => {
-      updatePriceRangeOptions(getCheckedValues('category'));
-    }, 0);
+      fillDistrictOptions();
+      fillRoomsOptions();
+      fillPriceRangeOptions();
+    }, 100);
+
     // Гарантированно навешиваем обработчик на кнопку каждый раз
     const showBtn = document.querySelector('.show-results');
     if (showBtn) {
@@ -1337,11 +1342,19 @@ function fillRoomsOptions() {
 
 function fillPriceRangeOptions() {
   const select = document.getElementById('price-range-multiselect');
-  console.log('Price range translations:', priceRangeTranslations);
   
   if (!select) {
     console.error('Price range select element not found');
     return;
+  }
+
+  // Уничтожаем существующий экземпляр Choices.js если он есть
+  if (window.priceRangeChoices) {
+    try {
+      window.priceRangeChoices.destroy();
+    } catch (e) {
+      console.warn('Error destroying existing Choices instance:', e);
+    }
   }
   
   const lang = getCurrentLanguage();
@@ -1349,7 +1362,6 @@ function fillPriceRangeOptions() {
 
   // Проверяем наличие опций для аренды
   if (priceRangeTranslations.rent && priceRangeTranslations.rent.length > 0) {
-    console.log('Adding rent options:', priceRangeTranslations.rent.length);
     const rentOptgroup = document.createElement('optgroup');
     rentOptgroup.label = {
       en: 'Rent',
@@ -1368,7 +1380,6 @@ function fillPriceRangeOptions() {
 
   // Проверяем наличие опций для продажи
   if (priceRangeTranslations.sale && priceRangeTranslations.sale.length > 0) {
-    console.log('Adding sale options:', priceRangeTranslations.sale.length);
     const saleOptgroup = document.createElement('optgroup');
     saleOptgroup.label = {
       en: 'Sale',
@@ -1385,53 +1396,41 @@ function fillPriceRangeOptions() {
     select.appendChild(saleOptgroup);
   }
 
-  console.log('Final select HTML:', select.innerHTML);
-
-  // Инициализируем Choices.js
-  if (window.priceRangeChoices) {
-    window.priceRangeChoices.destroy();
-  }
-
-  window.priceRangeChoices = new Choices(select, {
-    removeItemButton: true,
-    searchEnabled: false,
-    placeholder: true,
-    placeholderValue: {
-      en: 'Select price range',
-      cs: 'Vyberte cenové rozpětí',
-      ru: 'Выберите ценовой диапазон'
-    }[lang] || 'Select price range',
-    shouldSort: false,
-    itemSelectText: '',
-    renderSelectedChoices: 'auto'
-  });
+  // Создаем новый экземпляр Choices с задержкой
+  setTimeout(() => {
+    try {
+      window.priceRangeChoices = new Choices(select, {
+        removeItemButton: true,
+        searchEnabled: false,
+        placeholder: true,
+        placeholderValue: {
+          en: 'Select price range',
+          cs: 'Vyberte cenové rozpětí',
+          ru: 'Выберите ценовой диапазон'
+        }[lang] || 'Select price range',
+        shouldSort: false,
+        itemSelectText: '',
+        renderSelectedChoices: 'auto',
+        noResultsText: {
+          en: 'No results found',
+          cs: 'Žádné výsledky',
+          ru: 'Ничего не найдено'
+        }[lang] || 'No results found'
+      });
+    } catch (e) {
+      console.error('Error initializing Choices:', e);
+    }
+  }, 100);
 }
 
+// Обновляем обработчик DOMContentLoaded
 document.addEventListener('DOMContentLoaded', function() {
-  fillDistrictOptions();
-  fillRoomsOptions();
-  fillPriceRangeOptions(); // Теперь эта функция полностью отвечает за инициализацию price range
-
-  // Инициализация остальных селектов
-  window.districtChoices = new Choices('#district-multiselect', {
-    removeItemButton: true,
-    searchEnabled: true,
-    placeholder: true,
-    placeholderValue: 'Select districts',
-    shouldSort: false,
-    itemSelectText: '',
-    renderSelectedChoices: 'auto'
-  });
-
-  window.roomsChoices = new Choices('#rooms-multiselect', {
-    removeItemButton: true,
-    searchEnabled: true,
-    placeholder: true,
-    placeholderValue: 'Select rooms',
-    shouldSort: false,
-    itemSelectText: '',
-    renderSelectedChoices: 'auto'
-  });
+  // Инициализируем селекты с небольшой задержкой
+  setTimeout(() => {
+    fillDistrictOptions();
+    fillRoomsOptions();
+    fillPriceRangeOptions();
+  }, 100);
 });
 
 // === ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ===
