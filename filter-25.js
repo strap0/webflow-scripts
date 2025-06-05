@@ -576,81 +576,113 @@ function getCheckedValues(id) {
 
 // Обновляем функцию applyFilters
 function applyFilters() {
+  console.log('Applying filters...');
+  
+  // Получаем значения фильтров
   const filters = {
     category: Array.from(document.querySelectorAll('#category input[type="checkbox"]:checked')).map(cb => cb.value),
     type: Array.from(document.querySelectorAll('#type input[type="checkbox"]:checked')).map(cb => cb.value),
-    district: window.districtChoices ? window.districtChoices.getValue().map(v => v.value) : [],
-    rooms: window.roomsChoices ? window.roomsChoices.getValue().map(v => v.value) : [],
-    location: document.querySelector('#location')?.value.trim().toLowerCase() || '',
-    priceRange: window.priceRangeChoices ? window.priceRangeChoices.getValue().map(v => v.value) : []
+    district: window.districtChoices ? window.districtChoices.getValue().map(choice => choice.value) : [],
+    rooms: window.roomsChoices ? window.roomsChoices.getValue().map(choice => choice.value) : [],
+    priceRange: window.priceRangeChoices ? window.priceRangeChoices.getValue() : []
   };
 
+  console.log('Current filters:', filters);
+
   // Показываем все карточки перед фильтрацией
-  document.querySelectorAll('[fs-cmsfilter-element="item"]').forEach(card => {
+  const cards = document.querySelectorAll('[fs-cmsfilter-element="item"]');
+  cards.forEach(card => {
     card.style.display = '';
     card.classList.remove('is-hidden');
   });
 
   // Фильтруем карточки
-  document.querySelectorAll('[fs-cmsfilter-element="item"]').forEach(card => {
+  cards.forEach(card => {
     let show = true;
 
-    // Проверяем категорию только если она выбрана
+    // Проверяем категорию
     if (filters.category.length > 0) {
       const categoryElement = card.querySelector('[fs-cmsfilter-field="Category"]');
-      const cardCategory = categoryElement?.dataset.original || categoryElement?.textContent.trim();
-      if (!filters.category.includes(cardCategory)) show = false;
+      const cardCategory = categoryElement ? (categoryElement.dataset.original || categoryElement.textContent.trim()) : null;
+      if (!cardCategory || !filters.category.includes(cardCategory)) {
+        show = false;
+      }
     }
 
     // Проверяем тип недвижимости
     if (show && filters.type.length > 0) {
       const typeElement = card.querySelector('[fs-cmsfilter-field="Type"]');
-      const cardType = typeElement?.dataset.original || typeElement?.textContent.trim();
-      if (!filters.type.includes(cardType)) show = false;
+      const cardType = typeElement ? (typeElement.dataset.original || typeElement.textContent.trim()) : null;
+      if (!cardType || !filters.type.includes(cardType)) {
+        show = false;
+      }
     }
 
     // Проверяем район
     if (show && filters.district.length > 0) {
-      const cardZone = card.querySelector('[fs-cmsfilter-field="zone"]')?.textContent.trim();
-      if (!filters.district.includes(cardZone)) show = false;
+      const zoneElement = card.querySelector('[fs-cmsfilter-field="zone"]');
+      const cardZone = zoneElement ? zoneElement.textContent.trim() : null;
+      if (!cardZone || !filters.district.includes(cardZone)) {
+        show = false;
+      }
     }
 
     // Проверяем комнаты
     if (show && filters.rooms.length > 0) {
-      const cardRooms = card.querySelector('[fs-cmsfilter-field="Rooms"]')?.textContent.trim();
-      if (!filters.rooms.includes(cardRooms)) show = false;
-    }
-
-    // Проверяем адрес
-    if (show && filters.location) {
-      const cardLocation = card.querySelector('.catalog-location-rent')?.textContent.toLowerCase().trim();
-      if (!cardLocation?.includes(filters.location)) show = false;
+      const roomsElement = card.querySelector('[fs-cmsfilter-field="Rooms"]');
+      const cardRooms = roomsElement ? roomsElement.textContent.trim() : null;
+      if (!cardRooms || !filters.rooms.includes(cardRooms)) {
+        show = false;
+      }
     }
 
     // Проверяем ценовой диапазон
     if (show && filters.priceRange.length > 0) {
-      const priceText = card.querySelector('.catalog-price-rent')?.textContent.trim();
-      const price = parseInt(priceText.replace(/[^\d]/g, ''));
-      
-      let priceInRange = false;
-      filters.priceRange.forEach(range => {
-        if (range.includes('+')) {
-          const minPrice = parseInt(range.replace('+', ''));
-          if (price >= minPrice) priceInRange = true;
-        } else {
-          const [min, max] = range.split('-').map(v => parseInt(v));
-          if (price >= min && price <= max) priceInRange = true;
+      const priceElement = card.querySelector('.catalog-price-rent');
+      if (priceElement) {
+        const priceText = priceElement.textContent.trim();
+        const price = parseInt(priceText.replace(/[^\d]/g, ''));
+        
+        let priceInRange = false;
+        filters.priceRange.forEach(range => {
+          if (typeof range === 'string') {
+            if (range.includes('+')) {
+              const minPrice = parseInt(range.split('+')[0]);
+              if (price >= minPrice) priceInRange = true;
+            } else if (range.includes('-')) {
+              const [min, max] = range.split('-').map(v => parseInt(v));
+              if (price >= min && price <= max) priceInRange = true;
+            }
+          }
+        });
+        
+        if (!priceInRange) {
+          show = false;
         }
-      });
-      
-      if (!priceInRange) show = false;
+      }
     }
 
-    card.style.display = show ? '' : 'none';
-    card.classList.toggle('is-hidden', !show);
+    // Применяем фильтрацию
+    if (show) {
+      card.style.display = '';
+      card.classList.remove('is-hidden');
+    } else {
+      card.style.display = 'none';
+      card.classList.add('is-hidden');
+    }
   });
 
-  // Закрываем попап после применения фильтров
+  // Проверяем, есть ли видимые карточки
+  const hasVisibleCards = Array.from(cards).some(card => !card.classList.contains('is-hidden'));
+  console.log('Visible cards after filtering:', hasVisibleCards);
+
+  // Показываем сообщение если нет результатов
+  const noResultsMessage = document.querySelector('.no-results-message');
+  if (noResultsMessage) {
+    noResultsMessage.style.display = hasVisibleCards ? 'none' : 'block';
+  }
+
+  // Закрываем попап
   closeFilterPopup();
 }
 
@@ -1372,49 +1404,56 @@ function initChoices() {
   
   // Конфигурация для Choices.js
   const choicesConfig = {
-    district: {
-      placeholder: {
+    removeItemButton: true,
+    searchEnabled: false,
+    placeholder: true,
+    shouldSort: false,
+    itemSelectText: '',
+    renderSelectedChoices: 'auto'
+  };
+
+  // Инициализация district
+  const districtSelect = document.getElementById('district-multiselect');
+  if (districtSelect) {
+    if (window.districtChoices) window.districtChoices.destroy();
+    window.districtChoices = new Choices(districtSelect, {
+      ...choicesConfig,
+      searchEnabled: true,
+      placeholderValue: {
         en: 'Select districts',
         cs: 'Vyberte městské části',
         ru: 'Выберите район'
-      }
-    },
-    rooms: {
-      placeholder: {
+      }[lang] || 'Select districts'
+    });
+  }
+
+  // Инициализация rooms
+  const roomsSelect = document.getElementById('rooms-multiselect');
+  if (roomsSelect) {
+    if (window.roomsChoices) window.roomsChoices.destroy();
+    window.roomsChoices = new Choices(roomsSelect, {
+      ...choicesConfig,
+      placeholderValue: {
         en: 'Select rooms',
         cs: 'Vyberte počet pokojů',
         ru: 'Выберите количество комнат'
-      }
-    },
-    'price-range': {
-      placeholder: {
+      }[lang] || 'Select rooms'
+    });
+  }
+
+  // Инициализация price range
+  const priceRangeSelect = document.getElementById('price-range-multiselect');
+  if (priceRangeSelect) {
+    if (window.priceRangeChoices) window.priceRangeChoices.destroy();
+    window.priceRangeChoices = new Choices(priceRangeSelect, {
+      ...choicesConfig,
+      placeholderValue: {
         en: 'Select price range',
         cs: 'Vyberte cenové rozpětí',
         ru: 'Выберите ценовой диапазон'
-      }
-    }
-  };
-
-  ['district', 'rooms', 'price-range'].forEach(type => {
-    const select = document.getElementById(`${type}-multiselect`);
-    if (!select) return;
-
-    // Уничтожаем существующий экземпляр, если есть
-    if (window[`${type.replace('-', '')}Choices`]) {
-      window[`${type.replace('-', '')}Choices`].destroy();
-    }
-
-    // Создаем новый экземпляр
-    window[`${type.replace('-', '')}Choices`] = new Choices(select, {
-      removeItemButton: true,
-      searchEnabled: type === 'district',
-      placeholder: true,
-      placeholderValue: choicesConfig[type].placeholder[lang] || choicesConfig[type].placeholder.en,
-      shouldSort: false,
-      itemSelectText: '',
-      renderSelectedChoices: 'auto'
+      }[lang] || 'Select price range'
     });
-  });
+  }
 }
 
 // Обновляем инициализацию при загрузке страницы
