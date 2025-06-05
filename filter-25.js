@@ -1,6 +1,6 @@
 
 
-// Глобальные переменные
+// Г-лобальные переменные
 let map;
 let markers = [];
 let autocomplete;
@@ -778,29 +778,32 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Обновляем функцию resetFilters
 function resetFilters() {
-  // Сбросить обычные чекбоксы
-  document.querySelectorAll('.checkbox-group input[type="checkbox"]').forEach(cb => cb.checked = false);
+  console.log('Resetting filters...');
   
-  // Сбросить multiselect
+  // Сбрасываем чекбоксы
+  document.querySelectorAll('.checkbox-group input[type="checkbox"]').forEach(cb => {
+    cb.checked = false;
+  });
+  
+  // Сбрасываем мультиселекты
   if (window.districtChoices) window.districtChoices.removeActiveItems();
   if (window.roomsChoices) window.roomsChoices.removeActiveItems();
   if (window.priceRangeChoices) window.priceRangeChoices.removeActiveItems();
 
-  // Сбросить поле адреса
+  // Сбрасываем поле адреса
   const locationInput = document.querySelector('#location');
   if (locationInput) locationInput.value = '';
 
-  // Очистить сохраненное состояние
+  // Очищаем сохраненное состояние
   sessionStorage.removeItem('filterState');
 
-  // Показать все карточки
+  // Показываем все карточки
   document.querySelectorAll('[fs-cmsfilter-element="item"]').forEach(card => {
     card.style.display = '';
     card.classList.remove('is-hidden');
   });
 
-  // Обновить карту если есть
-  if (window.map) loadMarkers();
+  console.log('Filters reset completed');
 }
 
 function closeMapPopup() {
@@ -1043,18 +1046,15 @@ document.addEventListener("DOMContentLoaded", () => {
 // Функция для сохранения состояния фильтров
 function saveFilterState() {
   const state = {
-    category: getCheckedValues('category'),
-    type: getCheckedValues('type'),
-    district: getCheckedValues('district'),
-    rooms: getCheckedValues('rooms'),
-    location: document.querySelector('#location')?.value || '',
-    priceRange: (getCheckedValues('price-range') || []).map(value => {
-      // Убираем префикс при сохранении
-      const [type, range] = value.split('_');
-      return range;
-    }),
+    category: Array.from(document.querySelectorAll('#category input[type="checkbox"]:checked')).map(cb => cb.value),
+    type: Array.from(document.querySelectorAll('#type input[type="checkbox"]:checked')).map(cb => cb.value),
+    district: window.districtChoices ? window.districtChoices.getValue().map(choice => choice.value) : [],
+    rooms: window.roomsChoices ? window.roomsChoices.getValue().map(choice => choice.value) : [],
+    priceRange: window.priceRangeChoices ? window.priceRangeChoices.getValue() : [],
+    location: document.querySelector('#location')?.value || ''
   };
   sessionStorage.setItem('filterState', JSON.stringify(state));
+  console.log('Saved filter state:', state);
 }
 
 // Функция для восстановления состояния фильтров
@@ -1063,18 +1063,47 @@ function restoreFilterState() {
   if (!savedState) return;
 
   const state = JSON.parse(savedState);
-  
-  // Восстанавливаем чекбоксы
-  Object.entries(state).forEach(([key, values]) => {
-    if (Array.isArray(values)) {
-      values.forEach(value => {
-        const checkbox = document.querySelector(`#${key} input[value="${value}"]`);
-        if (checkbox) checkbox.checked = true;
-      });
-    }
-  });
+  console.log('Restoring filter state:', state);
 
-  // Восстанавливаем поле адреса
+  // Восстанавливаем чекбоксы категорий
+  if (state.category) {
+    document.querySelectorAll('#category input[type="checkbox"]').forEach(cb => {
+      cb.checked = state.category.includes(cb.value);
+    });
+  }
+
+  // Восстанавливаем чекбоксы типов
+  if (state.type) {
+    document.querySelectorAll('#type input[type="checkbox"]').forEach(cb => {
+      cb.checked = state.type.includes(cb.value);
+    });
+  }
+
+  // Восстанавливаем district
+  if (state.district && window.districtChoices) {
+    window.districtChoices.removeActiveItems();
+    state.district.forEach(value => {
+      window.districtChoices.setChoiceByValue(value);
+    });
+  }
+
+  // Восстанавливаем rooms
+  if (state.rooms && window.roomsChoices) {
+    window.roomsChoices.removeActiveItems();
+    state.rooms.forEach(value => {
+      window.roomsChoices.setChoiceByValue(value);
+    });
+  }
+
+  // Восстанавливаем price range
+  if (state.priceRange && window.priceRangeChoices) {
+    window.priceRangeChoices.removeActiveItems();
+    state.priceRange.forEach(value => {
+      window.priceRangeChoices.setChoiceByValue(value);
+    });
+  }
+
+  // Восстанавливаем location
   if (state.location) {
     const locationInput = document.querySelector('#location');
     if (locationInput) locationInput.value = state.location;
@@ -1230,24 +1259,81 @@ function fillPriceRangeOptions() {
 
 // Обновляем обработчик DOMContentLoaded
 document.addEventListener('DOMContentLoaded', function() {
-  // Находим все чекбоксы категорий
-  const categoryCheckboxes = document.querySelectorAll('#category input[type="checkbox"]');
-  
-  // Добавляем обработчик изменения для каждого чекбокса
-  categoryCheckboxes.forEach(checkbox => {
-    checkbox.addEventListener('change', function() {
-      // Обновляем ценовой диапазон при изменении категории
-      fillPriceRangeOptions();
+  // Восстанавливаем состояние фильтров при загрузке
+  restoreFilterState();
+
+  // Обработчик для кнопки "Показать объявления"
+  const showResultsBtn = document.querySelector('.show-results');
+  if (showResultsBtn) {
+    showResultsBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      console.log('Show results button clicked');
+      applyFilters();
+    });
+  }
+
+  // Обработчик для кнопки "Сбросить фильтры"
+  const resetBtn = document.querySelector('.reset-filters');
+  if (resetBtn) {
+    resetBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      resetFilters();
+    });
+  }
+
+  // Обработчик открытия попапа фильтров
+  const filterBtn = document.querySelector('.catalog-button-filter');
+  if (filterBtn) {
+    filterBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      restoreFilterState(); // Восстанавливаем состояние при открытии попапа
+    });
+  }
+
+  // Обработчики для чекбоксов
+  ['category', 'type'].forEach(group => {
+    const checkboxes = document.querySelectorAll(`#${group} input[type="checkbox"]`);
+    checkboxes.forEach(checkbox => {
+      checkbox.addEventListener('change', function() {
+        console.log(`${group} checkbox changed:`, this.value, this.checked);
+        if (group === 'category') {
+          // При изменении категории обновляем ценовые диапазоны
+          updatePriceRangeOptions([this.value]);
+        }
+      });
     });
   });
-
-  // Инициализация при загрузке
-  setTimeout(() => {
-    fillDistrictOptions();
-    fillRoomsOptions();
-    fillPriceRangeOptions();
-  }, 100);
 });
+
+// Обновляем функцию resetFilters
+function resetFilters() {
+  console.log('Resetting filters...');
+  
+  // Сбрасываем чекбоксы
+  document.querySelectorAll('.checkbox-group input[type="checkbox"]').forEach(cb => {
+    cb.checked = false;
+  });
+  
+  // Сбрасываем мультиселекты
+  if (window.districtChoices) window.districtChoices.removeActiveItems();
+  if (window.roomsChoices) window.roomsChoices.removeActiveItems();
+  if (window.priceRangeChoices) window.priceRangeChoices.removeActiveItems();
+
+  // Сбрасываем поле адреса
+  const locationInput = document.querySelector('#location');
+  if (locationInput) locationInput.value = '';
+
+  // Очищаем сохраненное состояние
+  sessionStorage.removeItem('filterState');
+
+  // Показываем все карточки
+  document.querySelectorAll('[fs-cmsfilter-element="item"]').forEach(card => {
+    card.style.display = '';
+    card.classList.remove('is-hidden');
+  });
+
+  console.log('Filters reset completed');
+}
 
 // === ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ===
 
