@@ -1,6 +1,6 @@
 
 
-// в2Глобальные переменные
+// ГUUUлобальные переменные
 let map;
 let markers = [];
 let autocomplete;
@@ -438,10 +438,10 @@ function loadCMSOptions() {
     const values = new Set();
     
     if (id === 'district') {
+      // Только районы Праги, без пригородов
       for (let i = 1; i <= 22; i++) {
         values.add(`Prague ${i}`);
       }
-      values.add('Suburbs');
     } else if (id === 'rooms') {
       ['1+kk', '1+1', '2+kk', '2+1', '3+kk', '3+1', '4+kk', '4+1', '5+kk', '5+1', '6 and more'].forEach(room => {
         values.add(room);
@@ -450,17 +450,17 @@ function loadCMSOptions() {
       // Фиксированный порядок для категорий
       values.add('Rent');
       values.add('Sale');
-    } else {
-      document.querySelectorAll(`[fs-cmsfilter-field="${cmsField}"]`).forEach(item => {
-        const text = item.textContent.trim();
-        if (text) values.add(text);
-      });
+    } else if (id === 'type') {
+      // Фиксированный порядок для типов недвижимости
+      values.add('Apartment');
+      values.add('House');
+      values.add('Commercial space');
     }
 
     container.innerHTML = '';
     let sortedValues = Array.from(values);
 
-    // Специальная сортировка для разных типов
+    // Специальная сортировка для районов
     if (id === 'district') {
       sortedValues.sort((a, b) => {
         const aMatch = a.match(/Prague\s*(\d+)/);
@@ -470,20 +470,6 @@ function loadCMSOptions() {
         }
         return a.localeCompare(b);
       });
-    } else if (id === 'rooms') {
-      const roomOrder = {
-        '1+kk': 0, '1+1': 1,
-        '2+kk': 2, '2+1': 3,
-        '3+kk': 4, '3+1': 5,
-        '4+kk': 6, '4+1': 7,
-        '5+kk': 8, '5+1': 9,
-        '6 and more': 10
-      };
-      sortedValues.sort((a, b) => (roomOrder[a] || 99) - (roomOrder[b] || 99));
-    } else if (id === 'type') {
-      // Фиксированный порядок для типов недвижимости
-      const typeOrder = ['Apartment', 'House', 'Commercial space'];
-      sortedValues.sort((a, b) => typeOrder.indexOf(a) - typeOrder.indexOf(b));
     }
 
     sortedValues.forEach(val => {
@@ -593,8 +579,11 @@ function openFilterPopup() {
   if (popup) {
     popup.style.display = 'flex';
     document.body.style.overflow = 'hidden';
+    loadCMSOptions();
+    restoreFilterState();
     fillPriceRangeOptions();
 
+    // Гарантированно навешиваем обработчик на кнопку каждый раз
     const showBtn = document.querySelector('.show-results');
     if (showBtn) {
       showBtn.onclick = function() {
@@ -1332,21 +1321,39 @@ function restoreFilterState() {
   }
 }
 
-// Заполняем multiselect опции (можно доработать под ваши данные)
+// Обновляем функцию fillDistrictOptions
 function fillDistrictOptions() {
   const select = document.getElementById('district-multiselect');
+  if (!select) return;
+
   select.innerHTML = '';
+  // Только районы Праги, без пригородов
   for (let i = 1; i <= 22; i++) {
     const opt = document.createElement('option');
     opt.value = `Prague ${i}`;
     opt.textContent = `Prague ${i}`;
     select.appendChild(opt);
   }
-  const suburbs = document.createElement('option');
-  suburbs.value = 'Suburbs';
-  suburbs.textContent = 'Suburbs';
-  select.appendChild(suburbs);
+
+  // Инициализируем Choices.js
+  if (window.districtChoices) {
+    window.districtChoices.destroy();
+  }
+
+  window.districtChoices = new Choices(select, {
+    removeItemButton: true,
+    searchEnabled: true,
+    placeholder: true,
+    placeholderValue: {
+      en: 'Select districts',
+      cs: 'Vyberte městské části',
+      ru: 'Выберите район'
+    }[getCurrentLanguage()] || 'Select districts',
+    shouldSort: false,
+    itemSelectText: ''
+  });
 }
+
 function fillRoomsOptions() {
   const select = document.getElementById('rooms-multiselect');
   select.innerHTML = '';
@@ -1661,4 +1668,5 @@ observer.observe(document.documentElement, {
   attributes: true,
   attributeFilter: ['lang']
 });
+
 
