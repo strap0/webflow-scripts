@@ -1,6 +1,6 @@
 
 
-// ГUUUлобальные переменные
+// Гл3обальные переменные
 let map;
 let markers = [];
 let autocomplete;
@@ -579,16 +579,21 @@ function openFilterPopup() {
   if (popup) {
     popup.style.display = 'flex';
     document.body.style.overflow = 'hidden';
-    loadCMSOptions();
-    restoreFilterState();
+    
+    // Инициализируем все селекты
+    fillDistrictOptions();
+    fillRoomsOptions();
     fillPriceRangeOptions();
+    loadCMSOptions();
+    
+    // Восстанавливаем состояние фильтров
+    restoreFilterState();
 
-    // Гарантированно навешиваем обработчик на кнопку каждый раз
+    // Обработчик для кнопки "Показать объявления"
     const showBtn = document.querySelector('.show-results');
     if (showBtn) {
       showBtn.onclick = function() {
         applyFilters();
-        closeFilterPopup();
       };
     }
   }
@@ -898,95 +903,72 @@ function filterByAddress(address) {
 }
 
 function applyFilters() {
-  // Получаем выбранные галочки Rent/Sale
-  const checkedCategories = Array.from(document.querySelectorAll('#category input[type="checkbox"]:checked')).map(cb => cb.value);
-  const rentBtn = document.querySelector('.deal-btn[data-category="Rent"]');
-  const saleBtn = document.querySelector('.deal-btn[data-category="Sale"]');
-
-  // Синхронизация активности кнопок
-  if (checkedCategories.includes('Rent') && checkedCategories.includes('Sale')) {
-    if (rentBtn) rentBtn.classList.remove('active');
-    if (saleBtn) saleBtn.classList.remove('active');
-  } else if (checkedCategories.includes('Rent')) {
-    if (rentBtn) rentBtn.classList.add('active');
-    if (saleBtn) saleBtn.classList.remove('active');
-  } else if (checkedCategories.includes('Sale')) {
-    if (saleBtn) saleBtn.classList.add('active');
-    if (rentBtn) rentBtn.classList.remove('active');
-  } else {
-    if (rentBtn) rentBtn.classList.remove('active');
-    if (saleBtn) saleBtn.classList.remove('active');
-  }
-
-  // Получаем выбранную категорию из активной кнопки (для фильтрации карточек)
-  const activeDealBtn = document.querySelector('.deal-btn.active');
-  const selectedCategory = activeDealBtn ? activeDealBtn.dataset.category : '';
-
   const filters = {
-    zone: getCheckedValues('district'),
-    rooms: getCheckedValues('rooms'),
-    type: getCheckedValues('type'),
-    category: getCheckedValues('category'),
-    location: document.querySelector('#location')?.value.trim().toLowerCase(),
-    priceRange: (getCheckedValues('price-range') || []).map(value => {
-      // Убираем префикс при фильтрации
-      const [type, range] = value.split('_');
-      return range;
-    }),
+    category: Array.from(document.querySelectorAll('#category input[type="checkbox"]:checked')).map(cb => cb.value),
+    type: Array.from(document.querySelectorAll('#type input[type="checkbox"]:checked')).map(cb => cb.value),
+    district: window.districtChoices ? window.districtChoices.getValue().map(v => v.value) : [],
+    rooms: window.roomsChoices ? window.roomsChoices.getValue().map(v => v.value) : [],
+    location: document.querySelector('#location')?.value.trim().toLowerCase() || '',
+    priceRange: window.priceRangeChoices ? window.priceRangeChoices.getValue().map(v => v.value) : []
   };
 
-  // Фильтрация карточек: ВСЕ, а не только видимые!
+  // Фильтруем карточки
   document.querySelectorAll('[fs-cmsfilter-element="item"]').forEach(card => {
-    const cardCategory = card.querySelector('[fs-cmsfilter-field="Category"]')?.textContent.trim();
     let show = true;
 
-    // Фильтрация по Rent/Sale
-    if (selectedCategory && cardCategory !== selectedCategory) show = false;
-
-    const check = (values, selector) => {
-      if (values.length === 0) return true;
-      const val = card.querySelector(selector)?.textContent.trim();
-      return values.includes(val);
-    };
-
-    if (!check(filters.zone, '[fs-cmsfilter-field="zone"]')) show = false;
-    if (!check(filters.rooms, '[fs-cmsfilter-field="Rooms"]')) show = false;
-    if (!check(filters.type, '[fs-cmsfilter-field="Type"]')) show = false;
-    if (!check(filters.category, '[fs-cmsfilter-field="Category"]')) show = false;
-
-    // --- УМНЫЙ ФИЛЬТР ПО АДРЕСУ ---
-    if (filters.location && show) {
-      const location = card.querySelector('.catalog-location-rent')?.textContent.toLowerCase().trim();
-      const searchWords = filters.location.split(/[, \s]+/).map(w => w.trim()).filter(Boolean);
-      const match = searchWords.some(word => location.includes(word));
-      if (!match) show = false;
+    // Проверяем категорию
+    if (filters.category.length > 0) {
+      const cardCategory = card.querySelector('[fs-cmsfilter-field="Category"]')?.textContent.trim();
+      if (!filters.category.includes(cardCategory)) show = false;
     }
 
-    // --- Фильтрация по цене (массив чекбоксов) ---
-    if (filters.priceRange.length > 0 && show) {
-      const priceElement = card.querySelector('.catalog-price-rent');
-      if (priceElement) {
-        const price = parseInt(priceElement.textContent.replace(/[^\d]/g, ''));
-        let priceInRange = false;
-        filters.priceRange.forEach(range => {
-          if (range.includes('+')) {
-            const minPrice = parseInt(range.replace('+', ''));
-            if (price >= minPrice) priceInRange = true;
-          } else {
-            const [min, max] = range.split('-').map(num => parseInt(num));
-            if (price >= min && price <= max) priceInRange = true;
-          }
-        });
-        if (!priceInRange) show = false;
-      }
+    // Проверяем тип недвижимости
+    if (show && filters.type.length > 0) {
+      const cardType = card.querySelector('[fs-cmsfilter-field="Type"]')?.textContent.trim();
+      if (!filters.type.includes(cardType)) show = false;
+    }
+
+    // Проверяем район
+    if (show && filters.district.length > 0) {
+      const cardZone = card.querySelector('[fs-cmsfilter-field="zone"]')?.textContent.trim();
+      if (!filters.district.includes(cardZone)) show = false;
+    }
+
+    // Проверяем комнаты
+    if (show && filters.rooms.length > 0) {
+      const cardRooms = card.querySelector('[fs-cmsfilter-field="Rooms"]')?.textContent.trim();
+      if (!filters.rooms.includes(cardRooms)) show = false;
+    }
+
+    // Проверяем адрес
+    if (show && filters.location) {
+      const cardLocation = card.querySelector('.catalog-location-rent')?.textContent.toLowerCase().trim();
+      if (!cardLocation?.includes(filters.location)) show = false;
+    }
+
+    // Проверяем ценовой диапазон
+    if (show && filters.priceRange.length > 0) {
+      const priceText = card.querySelector('.catalog-price-rent')?.textContent.trim();
+      const price = parseInt(priceText.replace(/[^\d]/g, ''));
+      
+      let priceInRange = false;
+      filters.priceRange.forEach(range => {
+        const [min, max] = range.split('-').map(v => parseInt(v));
+        if (range.includes('+')) {
+          if (price >= min) priceInRange = true;
+        } else {
+          if (price >= min && price <= max) priceInRange = true;
+        }
+      });
+      
+      if (!priceInRange) show = false;
     }
 
     card.classList.toggle('is-hidden', !show);
   });
 
-  saveFilterState();
-  if (typeof updatePaginationAfterFilter === 'function') updatePaginationAfterFilter();
-  if (window.map) setTimeout(loadMarkers, 100);
+  // Закрываем попап после применения фильтров
+  closeFilterPopup();
 }
 
 // Функция для сброса фильтров
@@ -1356,14 +1338,52 @@ function fillDistrictOptions() {
 
 function fillRoomsOptions() {
   const select = document.getElementById('rooms-multiselect');
+  if (!select) return;
+
+  const lang = getCurrentLanguage();
   select.innerHTML = '';
-  [
-     '1+kk', '1+1', '2+kk', '2+1', '3+kk', '3+1', '4+kk', '4+1', '5+kk', '5+1', '6 and more'
-  ].forEach(val => {
-    const opt = document.createElement('option');
-    opt.value = val;
-    opt.textContent = val;
-    select.appendChild(opt);
+
+  const roomOptions = [
+    { value: '1+kk', text: '1+kk' },
+    { value: '1+1', text: '1+1' },
+    { value: '2+kk', text: '2+kk' },
+    { value: '2+1', text: '2+1' },
+    { value: '3+kk', text: '3+kk' },
+    { value: '3+1', text: '3+1' },
+    { value: '4+kk', text: '4+kk' },
+    { value: '4+1', text: '4+1' },
+    { value: '5+kk', text: '5+kk' },
+    { value: '5+1', text: '5+1' },
+    { value: '6 and more', text: {
+      en: '6 and more',
+      cs: '6 a více',
+      ru: '6 и более'
+    }[lang] || '6 and more' }
+  ];
+
+  roomOptions.forEach(opt => {
+    const option = document.createElement('option');
+    option.value = opt.value;
+    option.textContent = opt.text.toString();
+    select.appendChild(option);
+  });
+
+  // Инициализируем Choices.js
+  if (window.roomsChoices) {
+    window.roomsChoices.destroy();
+  }
+
+  window.roomsChoices = new Choices(select, {
+    removeItemButton: true,
+    searchEnabled: false,
+    placeholder: true,
+    placeholderValue: {
+      en: 'Select rooms',
+      cs: 'Vyberte počet pokojů',
+      ru: 'Выберите количество комнат'
+    }[lang] || 'Select rooms',
+    shouldSort: false,
+    itemSelectText: ''
   });
 }
 
