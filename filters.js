@@ -17,6 +17,9 @@ choicesScript.onload = function() {
     fillPriceRangeOptions();
   }
 };
+choicesScript.onerror = function() {
+  console.error('[ERROR] Failed to load Choices.js script');
+};
 document.head.appendChild(choicesScript);
 
 // Глобальные переменные
@@ -1357,254 +1360,113 @@ function fillRoomsOptions() {
 }
 
 function fillPriceRangeOptions() {
+  console.log('[DEBUG] Starting fillPriceRangeOptions');
+  
   const select = document.getElementById('price-range-multiselect');
+  console.log('[DEBUG] Price range select element:', select);
+  
   if (!select) {
-    console.error('Price range select element not found');
+    console.error('[ERROR] Price range select element not found');
     return;
   }
   
   const lang = getCurrentLanguage();
-  select.innerHTML = '';
+  console.log('[DEBUG] Current language:', lang);
+  
+  try {
+    select.innerHTML = '';
+    
+    // Добавляем опции для аренды
+    console.log('[DEBUG] Adding rent options');
+    const rentOptgroup = document.createElement('optgroup');
+    rentOptgroup.label = {
+      en: 'Rent',
+      cs: 'Pronájem',
+      ru: 'Аренда'
+    }[lang] || 'Rent';
 
-  // Добавляем опции для аренды
-  const rentOptgroup = document.createElement('optgroup');
-  rentOptgroup.label = {
-    en: 'Rent',
-    cs: 'Pronájem',
-    ru: 'Аренда'
-  }[lang] || 'Rent';
+    priceRangeTranslations.rent.forEach(opt => {
+      const option = document.createElement('option');
+      option.value = opt.value;
+      option.textContent = opt.text[lang] || opt.text.en;
+      rentOptgroup.appendChild(option);
+    });
+    select.appendChild(rentOptgroup);
+    console.log('[DEBUG] Rent options added');
 
-  priceRangeTranslations.rent.forEach(opt => {
-    const option = document.createElement('option');
-    option.value = opt.value;
-    option.textContent = opt.text[lang] || opt.text.en;
-    rentOptgroup.appendChild(option);
-  });
-  select.appendChild(rentOptgroup);
+    // Добавляем опции для продажи
+    console.log('[DEBUG] Adding sale options');
+    const saleOptgroup = document.createElement('optgroup');
+    saleOptgroup.label = {
+      en: 'Sale',
+      cs: 'Prodej',
+      ru: 'Продажа'
+    }[lang] || 'Sale';
 
-  // Добавляем опции для продажи
-  const saleOptgroup = document.createElement('optgroup');
-  saleOptgroup.label = {
-    en: 'Sale',
-    cs: 'Prodej',
-    ru: 'Продажа'
-  }[lang] || 'Sale';
+    priceRangeTranslations.sale.forEach(opt => {
+      const option = document.createElement('option');
+      option.value = opt.value;
+      option.textContent = opt.text[lang] || opt.text.en;
+      saleOptgroup.appendChild(option);
+    });
+    select.appendChild(saleOptgroup);
+    console.log('[DEBUG] Sale options added');
 
-  priceRangeTranslations.sale.forEach(opt => {
-    const option = document.createElement('option');
-    option.value = opt.value;
-    option.textContent = opt.text[lang] || opt.text.en;
-    saleOptgroup.appendChild(option);
-  });
-  select.appendChild(saleOptgroup);
+    console.log('[DEBUG] Current select HTML:', select.innerHTML);
 
-  // Инициализируем Choices.js
-  if (window.priceRangeChoices) {
-    window.priceRangeChoices.destroy();
+    // Инициализируем Choices.js
+    console.log('[DEBUG] Initializing Choices.js');
+    console.log('[DEBUG] Choices available:', typeof Choices !== 'undefined');
+    
+    if (window.priceRangeChoices) {
+      console.log('[DEBUG] Destroying existing Choices instance');
+      window.priceRangeChoices.destroy();
+    }
+
+    window.priceRangeChoices = new Choices(select, {
+      removeItemButton: true,
+      searchEnabled: false,
+      placeholder: true,
+      placeholderValue: {
+        en: 'Select price range',
+        cs: 'Vyberte cenové rozpětí',
+        ru: 'Выберите ценовой диапазон'
+      }[lang] || 'Select price range',
+      shouldSort: false,
+      itemSelectText: '',
+      renderSelectedChoices: 'auto'
+    });
+    console.log('[DEBUG] Choices initialization complete');
+    
+  } catch (error) {
+    console.error('[ERROR] Error in fillPriceRangeOptions:', error);
   }
-
-  window.priceRangeChoices = new Choices(select, {
-    removeItemButton: true,
-    searchEnabled: false,
-    placeholder: true,
-    placeholderValue: {
-      en: 'Select price range',
-      cs: 'Vyberte cenové rozpětí',
-      ru: 'Выберите ценовой диапазон'
-    }[lang] || 'Select price range',
-    shouldSort: false,
-    itemSelectText: '',
-    renderSelectedChoices: 'auto'
-  });
 }
 
+// Обновляем обработчик DOMContentLoaded
 document.addEventListener('DOMContentLoaded', function() {
+  console.log('[DEBUG] DOMContentLoaded fired');
+  console.log('[DEBUG] Choices available on load:', typeof Choices !== 'undefined');
+  
   // Проверяем, загружен ли Choices.js
   if (typeof Choices !== 'undefined') {
+    console.log('[DEBUG] Choices is already loaded, initializing selects');
     fillDistrictOptions();
     fillRoomsOptions();
     fillPriceRangeOptions();
   } else {
-    console.log('Waiting for Choices.js to load...');
+    console.log('[DEBUG] Waiting for Choices.js to load...');
     // Ждем загрузки Choices.js
     const checkChoices = setInterval(() => {
+      console.log('[DEBUG] Checking if Choices is loaded...');
       if (typeof Choices !== 'undefined') {
+        console.log('[DEBUG] Choices loaded, initializing selects');
         clearInterval(checkChoices);
         fillDistrictOptions();
         fillRoomsOptions();
         fillPriceRangeOptions();
       }
     }, 100);
-  }
-
-  // Инициализация остальных селектов
-  window.districtChoices = new Choices('#district-multiselect', {
-    removeItemButton: true,
-    searchEnabled: true,
-    placeholder: true,
-    placeholderValue: 'Select districts',
-    shouldSort: false,
-    itemSelectText: '',
-    renderSelectedChoices: 'auto'
-  });
-
-  window.roomsChoices = new Choices('#rooms-multiselect', {
-    removeItemButton: true,
-    searchEnabled: true,
-    placeholder: true,
-    placeholderValue: 'Select rooms',
-    shouldSort: false,
-    itemSelectText: '',
-    renderSelectedChoices: 'auto'
-  });
-});
-
-// === ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ===
-
-// Геокодирование адреса (возвращает Promise)
-function geocodeAddress(address) {
-  console.log('[geocodeAddress] Геокодируем адрес:', address);
-  return new Promise((resolve, reject) => {
-    if (!window.google || !google.maps || !google.maps.Geocoder) {
-      console.error('[geocodeAddress] Google Maps не загружен');
-      reject('Google Maps не загружен');
-      return;
-    }
-    const geocoder = new google.maps.Geocoder();
-    geocoder.geocode({ address: address }, function(results, status) {
-      if (status === 'OK' && results[0]) {
-        console.log('[geocodeAddress] Успешно:', results[0].geometry.location.lat(), results[0].geometry.location.lng());
-        resolve(results[0].geometry.location);
-      } else {
-        console.warn('[geocodeAddress] Не найден адрес:', address, 'Статус:', status);
-        resolve(null);
-      }
-    });
-  });
-}
-
-// Расчёт расстояния между двумя точками (в метрах)
-function getDistanceMeters(lat1, lng1, lat2, lng2) {
-  function toRad(x) { return x * Math.PI / 180; }
-  const R = 6378137;
-  const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
-  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-            Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
-            Math.sin(dLng/2) * Math.sin(dLng/2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  return R * c;
-}
-
-// === ГЛАВНАЯ ФУНКЦИЯ ФИЛЬТРАЦИИ ПО РАДИУСУ ===
-
-async function filterByAddressRadius(userAddress, radiusMeters = 500) {
-  console.log('[filterByAddressRadius] Старт. Введённый адрес:', userAddress);
-
-  // 1. Геокодируем введённый адрес
-  const userLocation = await geocodeAddress(userAddress);
-  if (!userLocation) {
-    console.warn('[filterByAddressRadius] Не удалось геокодировать введённый адрес:', userAddress);
-    // alert('Не удалось найти этот адрес на карте.');
-    return;
-  }
-  console.log('[filterByAddressRadius] Координаты введённого адреса:', userLocation.lat(), userLocation.lng());
-
-  // 2. Собираем все карточки объявлений
-  const cards = document.querySelectorAll('.catalog-card-rent, [fs-cmsfilter-element="item"]');
-  let anyVisible = false;
-
-  // 3. Для каждой карточки:
-  for (const card of cards) {
-    // Получаем адрес из карточки (например, из .catalog-location-rent)
-    const cardAddressElem = card.querySelector('.catalog-location-rent');
-    if (!cardAddressElem) {
-      console.log('[filterByAddressRadius] Нет .catalog-location-rent в карточке:', card);
-      continue;
-    }
-    const cardAddress = cardAddressElem.textContent.trim() + ', Prague, Czech Republic';
-    console.log('[filterByAddressRadius] Адрес карточки:', cardAddress);
-
-    // Геокодируем адрес объявления (можно кэшировать для ускорения!)
-    let cardLatLng = card.dataset.latlng ? JSON.parse(card.dataset.latlng) : null;
-    if (!cardLatLng) {
-      const loc = await geocodeAddress(cardAddress);
-      if (!loc) {
-        console.warn('[filterByAddressRadius] Не удалось геокодировать адрес объявления:', cardAddress);
-        card.classList.add('is-hidden');
-        continue;
-      }
-      cardLatLng = { lat: loc.lat(), lng: loc.lng() };
-      card.dataset.latlng = JSON.stringify(cardLatLng); // кэшируем
-      console.log('[filterByAddressRadius] Геокодирован адрес объявления:', cardLatLng);
-    } else {
-      console.log('[filterByAddressRadius] Используем кэшированные координаты:', cardLatLng);
-    }
-
-    // Считаем расстояние
-    const dist = getDistanceMeters(
-      userLocation.lat(), userLocation.lng(),
-      cardLatLng.lat, cardLatLng.lng
-    );
-    console.log(`[filterByAddressRadius] Расстояние до объявления: ${dist.toFixed(1)} м`);
-
-    // Показываем/скрываем карточку
-    if (dist <= radiusMeters) {
-      card.classList.remove('is-hidden');
-      anyVisible = true;
-      console.log('[filterByAddressRadius] Показываем карточку (в радиусе)');
-    } else {
-      card.classList.add('is-hidden');
-      console.log('[filterByAddressRadius] Скрываем карточку (вне радиуса)');
-    }
-  }
-
-  // 4. Сообщение, если ничего не найдено
-  if (!anyVisible) {
-    console.warn('[filterByAddressRadius] Нет объявлений в радиусе', radiusMeters, 'м');
-    // alert('Нет объявлений в радиусе 500 метров от выбранного адреса.');
-  } else {
-    console.log('[filterByAddressRadius] Есть объявления в радиусе!');
-  }
-}
-
-// === ВСТАВЬТЕ В ВАШУ ЛОГИКУ ФИЛЬТРА ===
-
-// Например, при нажатии на "Show listings":
-document.addEventListener('click', async function(e) {
-  if (e.target.classList && e.target.classList.contains('show-results')) {
-    const addressInput = document.getElementById('location');
-    if (addressInput && addressInput.value.trim()) {
-      const userAddress = addressInput.value.trim().toLowerCase();
-      let anyStreetMatch = false;
-      const cards = document.querySelectorAll('.catalog-card-rent, [fs-cmsfilter-element="item"]');
-
-      // 1. Сначала ищем по совпадению улицы (по первым 4 символам)
-      cards.forEach(card => {
-        const cardAddressElem = card.querySelector('.catalog-location-rent');
-        if (!cardAddressElem) return;
-        const cardAddress = cardAddressElem.textContent.trim().toLowerCase();
-        // Можно сравнивать по первым 4 символам, либо по includes
-        if (cardAddress.includes(userAddress) || userAddress.includes(cardAddress) || cardAddress.substr(0,4) === userAddress.substr(0,4)) {
-          card.classList.remove('is-hidden');
-          anyStreetMatch = true;
-        } else {
-          card.classList.add('is-hidden');
-        }
-      });
-
-      if (anyStreetMatch) {
-        console.log('[filter] Найдены совпадения по улице, радиус не нужен');
-        return; // Если есть совпадения по улице — не фильтруем по радиусу
-      }
-
-      // 2. Если по улице ничего не найдено — фильтруем по радиусу
-      console.log('[filter] Совпадений по улице нет, фильтруем по радиусу');
-      await filterByAddressRadius(addressInput.value.trim(), 500);
-    } else {
-      // Если адрес не введён — обычная фильтрация
-      // applyFilters();
-    }
   }
 });
 
@@ -1676,5 +1538,4 @@ observer.observe(document.documentElement, {
   attributes: true,
   attributeFilter: ['lang']
 });
-
 
