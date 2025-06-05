@@ -1,6 +1,6 @@
 
 
-// Глобальные переменные
+// в2Глобальные переменные
 let map;
 let markers = [];
 let autocomplete;
@@ -512,21 +512,41 @@ function updatePriceRangeOptions() {
   // Очищаем селект
   priceRange.innerHTML = '';
 
-  // Добавляем все опции для аренды и продажи
-  function addOptions(options) {
-    options.forEach(opt => {
-      const option = document.createElement('option');
-      option.value = opt.value;
-      option.textContent = opt.text[lang] || opt.text.en;
-      priceRange.appendChild(option);
-    });
-  }
+  // Создаем группы опций
+  const rentGroup = document.createElement('optgroup');
+  rentGroup.label = {
+    en: 'Rent',
+    cs: 'Pronájem',
+    ru: 'Аренда'
+  }[lang] || 'Rent';
 
-  // Добавляем сначала опции для аренды, потом для продажи
-  addOptions(priceRangeTranslations.rent);
-  addOptions(priceRangeTranslations.sale);
+  const saleGroup = document.createElement('optgroup');
+  saleGroup.label = {
+    en: 'Sale',
+    cs: 'Prodej',
+    ru: 'Продажа'
+  }[lang] || 'Sale';
 
-  // Создаем новый экземпляр Choices.js
+  // Добавляем все опции
+  priceRangeTranslations.rent.forEach(opt => {
+    const option = document.createElement('option');
+    option.value = opt.value;
+    option.textContent = opt.text[lang] || opt.text.en;
+    rentGroup.appendChild(option);
+  });
+
+  priceRangeTranslations.sale.forEach(opt => {
+    const option = document.createElement('option');
+    option.value = opt.value;
+    option.textContent = opt.text[lang] || opt.text.en;
+    saleGroup.appendChild(option);
+  });
+
+  // Добавляем группы в селект
+  priceRange.appendChild(rentGroup);
+  priceRange.appendChild(saleGroup);
+
+  // Инициализируем Choices.js
   window.priceRangeChoices = new Choices(priceRange, {
     removeItemButton: true,
     searchEnabled: false,
@@ -537,8 +557,7 @@ function updatePriceRangeOptions() {
       ru: 'Выберите ценовой диапазон'
     }[lang] || 'Select price range',
     shouldSort: false,
-    itemSelectText: '',
-    renderSelectedChoices: 'auto'
+    itemSelectText: ''
   });
 }
 
@@ -574,15 +593,8 @@ function openFilterPopup() {
   if (popup) {
     popup.style.display = 'flex';
     document.body.style.overflow = 'hidden';
-    
-    // Инициализируем селекты с задержкой после открытия попапа
-    setTimeout(() => {
-      fillDistrictOptions();
-      fillRoomsOptions();
-      fillPriceRangeOptions();
-    }, 100);
+    fillPriceRangeOptions();
 
-    // Гарантированно навешиваем обработчик на кнопку каждый раз
     const showBtn = document.querySelector('.show-results');
     if (showBtn) {
       showBtn.onclick = function() {
@@ -927,7 +939,11 @@ function applyFilters() {
     type: getCheckedValues('type'),
     category: getCheckedValues('category'),
     location: document.querySelector('#location')?.value.trim().toLowerCase(),
-    priceRange: getCheckedValues('price-range'),
+    priceRange: (getCheckedValues('price-range') || []).map(value => {
+      // Убираем префикс при фильтрации
+      const [type, range] = value.split('_');
+      return range;
+    }),
   };
 
   // Фильтрация карточек: ВСЕ, а не только видимые!
@@ -1283,7 +1299,11 @@ function saveFilterState() {
     district: getCheckedValues('district'),
     rooms: getCheckedValues('rooms'),
     location: document.querySelector('#location')?.value || '',
-    priceRange: getCheckedValues('price-range'),
+    priceRange: (getCheckedValues('price-range') || []).map(value => {
+      // Убираем префикс при сохранении
+      const [type, range] = value.split('_');
+      return range;
+    }),
   };
   sessionStorage.setItem('filterState', JSON.stringify(state));
 }
@@ -1342,90 +1362,81 @@ function fillRoomsOptions() {
 
 function fillPriceRangeOptions() {
   const select = document.getElementById('price-range-multiselect');
-  
-  if (!select) {
-    console.error('Price range select element not found');
-    return;
-  }
+  if (!select) return;
+
+  const lang = getCurrentLanguage();
 
   // Уничтожаем существующий экземпляр Choices.js если он есть
   if (window.priceRangeChoices) {
-    try {
-      window.priceRangeChoices.destroy();
-    } catch (e) {
-      console.warn('Error destroying existing Choices instance:', e);
-    }
+    window.priceRangeChoices.destroy();
   }
-  
-  const lang = getCurrentLanguage();
+
+  // Очищаем селект
   select.innerHTML = '';
 
-  // Проверяем наличие опций для аренды
-  if (priceRangeTranslations.rent && priceRangeTranslations.rent.length > 0) {
-    const rentOptgroup = document.createElement('optgroup');
-    rentOptgroup.label = {
-      en: 'Rent',
-      cs: 'Pronájem',
-      ru: 'Аренда'
-    }[lang] || 'Rent';
+  // Создаем группы опций
+  const rentGroup = document.createElement('optgroup');
+  rentGroup.label = {
+    en: 'Rent',
+    cs: 'Pronájem',
+    ru: 'Аренда'
+  }[lang] || 'Rent';
 
-    priceRangeTranslations.rent.forEach(opt => {
-      const option = document.createElement('option');
-      option.value = opt.value;
-      option.textContent = opt.text[lang] || opt.text.en;
-      rentOptgroup.appendChild(option);
-    });
-    select.appendChild(rentOptgroup);
-  }
+  const saleGroup = document.createElement('optgroup');
+  saleGroup.label = {
+    en: 'Sale',
+    cs: 'Prodej',
+    ru: 'Продажа'
+  }[lang] || 'Sale';
 
-  // Проверяем наличие опций для продажи
-  if (priceRangeTranslations.sale && priceRangeTranslations.sale.length > 0) {
-    const saleOptgroup = document.createElement('optgroup');
-    saleOptgroup.label = {
-      en: 'Sale',
-      cs: 'Prodej',
-      ru: 'Продажа'
-    }[lang] || 'Sale';
+  // Добавляем все опции
+  priceRangeTranslations.rent.forEach(opt => {
+    const option = document.createElement('option');
+    option.value = opt.value;
+    option.textContent = opt.text[lang] || opt.text.en;
+    rentGroup.appendChild(option);
+  });
 
-    priceRangeTranslations.sale.forEach(opt => {
-      const option = document.createElement('option');
-      option.value = opt.value;
-      option.textContent = opt.text[lang] || opt.text.en;
-      saleOptgroup.appendChild(option);
-    });
-    select.appendChild(saleOptgroup);
-  }
+  priceRangeTranslations.sale.forEach(opt => {
+    const option = document.createElement('option');
+    option.value = opt.value;
+    option.textContent = opt.text[lang] || opt.text.en;
+    saleGroup.appendChild(option);
+  });
 
-  // Создаем новый экземпляр Choices с задержкой
-  setTimeout(() => {
-    try {
-      window.priceRangeChoices = new Choices(select, {
-        removeItemButton: true,
-        searchEnabled: false,
-        placeholder: true,
-        placeholderValue: {
-          en: 'Select price range',
-          cs: 'Vyberte cenové rozpětí',
-          ru: 'Выберите ценовой диапазон'
-        }[lang] || 'Select price range',
-        shouldSort: false,
-        itemSelectText: '',
-        renderSelectedChoices: 'auto',
-        noResultsText: {
-          en: 'No results found',
-          cs: 'Žádné výsledky',
-          ru: 'Ничего не найдено'
-        }[lang] || 'No results found'
-      });
-    } catch (e) {
-      console.error('Error initializing Choices:', e);
-    }
-  }, 100);
+  // Добавляем группы в селект
+  select.appendChild(rentGroup);
+  select.appendChild(saleGroup);
+
+  // Инициализируем Choices.js
+  window.priceRangeChoices = new Choices(select, {
+    removeItemButton: true,
+    searchEnabled: false,
+    placeholder: true,
+    placeholderValue: {
+      en: 'Select price range',
+      cs: 'Vyberte cenové rozpětí',
+      ru: 'Выберите ценовой диапазон'
+    }[lang] || 'Select price range',
+    shouldSort: false,
+    itemSelectText: ''
+  });
 }
 
 // Обновляем обработчик DOMContentLoaded
 document.addEventListener('DOMContentLoaded', function() {
-  // Инициализируем селекты с небольшой задержкой
+  // Находим все чекбоксы категорий
+  const categoryCheckboxes = document.querySelectorAll('#category input[type="checkbox"]');
+  
+  // Добавляем обработчик изменения для каждого чекбокса
+  categoryCheckboxes.forEach(checkbox => {
+    checkbox.addEventListener('change', function() {
+      // Обновляем ценовой диапазон при изменении категории
+      fillPriceRangeOptions();
+    });
+  });
+
+  // Инициализация при загрузке
   setTimeout(() => {
     fillDistrictOptions();
     fillRoomsOptions();
