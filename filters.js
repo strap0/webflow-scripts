@@ -1,4 +1,3 @@
-
 // Глобальные переменные
 let map;
 let markers = [];
@@ -1338,6 +1337,8 @@ function fillRoomsOptions() {
 
 function fillPriceRangeOptions() {
   const select = document.getElementById('price-range-multiselect');
+  console.log('Price range translations:', priceRangeTranslations);
+  
   if (!select) {
     console.error('Price range select element not found');
     return;
@@ -1346,37 +1347,45 @@ function fillPriceRangeOptions() {
   const lang = getCurrentLanguage();
   select.innerHTML = '';
 
-  // Добавляем опции для аренды
-  const rentOptgroup = document.createElement('optgroup');
-  rentOptgroup.label = {
-    en: 'Rent',
-    cs: 'Pronájem',
-    ru: 'Аренда'
-  }[lang] || 'Rent';
+  // Проверяем наличие опций для аренды
+  if (priceRangeTranslations.rent && priceRangeTranslations.rent.length > 0) {
+    console.log('Adding rent options:', priceRangeTranslations.rent.length);
+    const rentOptgroup = document.createElement('optgroup');
+    rentOptgroup.label = {
+      en: 'Rent',
+      cs: 'Pronájem',
+      ru: 'Аренда'
+    }[lang] || 'Rent';
 
-  priceRangeTranslations.rent.forEach(opt => {
-    const option = document.createElement('option');
-    option.value = opt.value;
-    option.textContent = opt.text[lang] || opt.text.en;
-    rentOptgroup.appendChild(option);
-  });
-  select.appendChild(rentOptgroup);
+    priceRangeTranslations.rent.forEach(opt => {
+      const option = document.createElement('option');
+      option.value = opt.value;
+      option.textContent = opt.text[lang] || opt.text.en;
+      rentOptgroup.appendChild(option);
+    });
+    select.appendChild(rentOptgroup);
+  }
 
-  // Добавляем опции для продажи
-  const saleOptgroup = document.createElement('optgroup');
-  saleOptgroup.label = {
-    en: 'Sale',
-    cs: 'Prodej',
-    ru: 'Продажа'
-  }[lang] || 'Sale';
+  // Проверяем наличие опций для продажи
+  if (priceRangeTranslations.sale && priceRangeTranslations.sale.length > 0) {
+    console.log('Adding sale options:', priceRangeTranslations.sale.length);
+    const saleOptgroup = document.createElement('optgroup');
+    saleOptgroup.label = {
+      en: 'Sale',
+      cs: 'Prodej',
+      ru: 'Продажа'
+    }[lang] || 'Sale';
 
-  priceRangeTranslations.sale.forEach(opt => {
-    const option = document.createElement('option');
-    option.value = opt.value;
-    option.textContent = opt.text[lang] || opt.text.en;
-    saleOptgroup.appendChild(option);
-  });
-  select.appendChild(saleOptgroup);
+    priceRangeTranslations.sale.forEach(opt => {
+      const option = document.createElement('option');
+      option.value = opt.value;
+      option.textContent = opt.text[lang] || opt.text.en;
+      saleOptgroup.appendChild(option);
+    });
+    select.appendChild(saleOptgroup);
+  }
+
+  console.log('Final select HTML:', select.innerHTML);
 
   // Инициализируем Choices.js
   if (window.priceRangeChoices) {
