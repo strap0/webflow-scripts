@@ -1,6 +1,5 @@
 
-
-// Гл3обальные переменные
+// аГлобальные переменные
 let map;
 let markers = [];
 let autocomplete;
@@ -574,6 +573,53 @@ function getCheckedValues(id) {
   return Array.from(document.querySelectorAll(`#${id} input[type="checkbox"]:checked`)).map(cb => cb.value);
 }
 
+// Функция для синхронизации состояния между кнопками и чекбоксами
+function syncDealTypeState(type) {
+  // Обновляем кнопки
+  const rentBtn = document.querySelector('.deal-btn[data-category="Rent"]');
+  const saleBtn = document.querySelector('.deal-btn[data-category="Sale"]');
+  
+  if (rentBtn && saleBtn) {
+    if (type === 'Rent') {
+      rentBtn.classList.add('active');
+      saleBtn.classList.remove('active');
+    } else if (type === 'Sale') {
+      saleBtn.classList.add('active');
+      rentBtn.classList.remove('active');
+    }
+  }
+
+  // Обновляем чекбоксы в попапе
+  const categoryCheckboxes = document.querySelectorAll('#category input[type="checkbox"]');
+  categoryCheckboxes.forEach(checkbox => {
+    checkbox.checked = checkbox.value === type;
+  });
+
+  // Фильтруем карточки
+  filterCardsByDealType(type);
+}
+
+// Обновленная функция filterCardsByDealType
+function filterCardsByDealType(type) {
+  const cards = document.querySelectorAll('[fs-cmsfilter-element="item"]');
+  cards.forEach(card => {
+    const categoryElement = card.querySelector('[fs-cmsfilter-field="Category"]');
+    if (!categoryElement) return;
+    
+    // Используем data-original для правильного сравнения
+    const cardCategory = categoryElement.dataset.original || categoryElement.textContent.trim();
+    
+    if (type === 'all' || cardCategory === type) {
+      card.style.display = '';
+      card.classList.remove('is-hidden');
+    } else {
+      card.style.display = 'none';
+      card.classList.add('is-hidden');
+    }
+  });
+}
+
+// Обновляем функцию openFilterPopup
 function openFilterPopup() {
   const popup = document.querySelector('.popup-filter');
   if (popup) {
@@ -586,13 +632,32 @@ function openFilterPopup() {
     fillPriceRangeOptions();
     loadCMSOptions();
     
-    // Восстанавливаем состояние фильтров
+    // Синхронизируем состояние с активной кнопкой
+    const activeBtn = document.querySelector('.deal-btn.active');
+    if (activeBtn) {
+      const dealType = activeBtn.dataset.category;
+      syncDealTypeState(dealType);
+    } else {
+      // По умолчанию выбираем Rent
+      syncDealTypeState('Rent');
+    }
+
+    // Восстанавливаем остальные фильтры
     restoreFilterState();
 
     // Обработчик для кнопки "Показать объявления"
     const showBtn = document.querySelector('.show-results');
     if (showBtn) {
       showBtn.onclick = function() {
+        // Получаем выбранную категорию из чекбоксов
+        const checkedCategory = Array.from(document.querySelectorAll('#category input[type="checkbox"]:checked'))
+          .map(cb => cb.value)[0];
+        
+        // Синхронизируем состояние перед применением фильтров
+        if (checkedCategory) {
+          syncDealTypeState(checkedCategory);
+        }
+        
         applyFilters();
       };
     }
@@ -1689,4 +1754,62 @@ observer.observe(document.documentElement, {
   attributeFilter: ['lang']
 });
 
+// Добавляем функцию для перевода контента карточек
+function translateCardContent() {
+  const lang = getCurrentLanguage();
+  
+  // Переводим все карточки
+  document.querySelectorAll('[fs-cmsfilter-element="item"]').forEach(card => {
+    // Перевод типа недвижимости
+    const typeElement = card.querySelector('[fs-cmsfilter-field="Type"]');
+    if (typeElement) {
+      const originalType = typeElement.textContent.trim();
+      if (cmsTranslations[originalType] && cmsTranslations[originalType][lang]) {
+        typeElement.textContent = cmsTranslations[originalType][lang];
+      }
+    }
+
+    // Перевод категории (Rent/Sale)
+    const categoryElement = card.querySelector('[fs-cmsfilter-field="Category"]');
+    if (categoryElement) {
+      const originalCategory = categoryElement.textContent.trim();
+      if (cmsTranslations[originalCategory] && cmsTranslations[originalCategory][lang]) {
+        categoryElement.textContent = cmsTranslations[originalCategory][lang];
+      }
+    }
+
+    // Перевод количества комнат (оставляем как есть, так как это технические обозначения)
+    // Но можно добавить всплывающую подсказку с переводом
+    const roomsElement = card.querySelector('[fs-cmsfilter-field="Rooms"]');
+    if (roomsElement) {
+      const originalRooms = roomsElement.textContent.trim();
+      if (originalRooms === '6 and more' && cmsTranslations[originalRooms]) {
+        roomsElement.textContent = cmsTranslations[originalRooms][lang] || originalRooms;
+      }
+    }
+  });
+}
+
+// Обновляем обработчик DOMContentLoaded
+document.addEventListener('DOMContentLoaded', function() {
+  // Существующий код инициализации
+  fillDistrictOptions();
+  fillRoomsOptions();
+  fillPriceRangeOptions();
+  loadCMSOptions();
+
+  // Добавляем перевод карточек
+  translateCardContent();
+});
+
+// Добавляем слушатель изменения языка для обновления переводов
+const languageObserver = new MutationObserver(() => {
+  console.log('[translate] Language changed, updating translations');
+  translateCardContent();
+});
+
+languageObserver.observe(document.documentElement, {
+  attributes: true,
+  attributeFilter: ['lang']
+});
 
